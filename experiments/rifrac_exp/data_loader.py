@@ -491,16 +491,25 @@ if __name__=="__main__":
     target_list=[label[0] for label in test_batch['class_target']]
     print(set(target_list))
 
-    for idx,i in enumerate(test_batch['class_target']):
-        if i>0:
-            break
+    cnt = 0
+    for idx, i in enumerate(test_batch['class_target']):
+        if i.all() > 0:
+            cnt += 1
+            if cnt == 10:
+                break
     data = test_batch['data']
     seg = test_batch['seg']
-    plt.subplot(1,2,1)
-    plt.imshow(data[idx][0])
-    plt.subplot(1,2,2)
-    plt.imshow(seg[idx][0])
-    plt.show()
+    if cf.dim == 2:
+        plt.subplot(1, 2, 1)
+        plt.imshow(data[idx][0])
+        plt.subplot(1, 2, 2)
+        plt.imshow(seg[idx][0])
+        plt.show()
+    else:
+        # save the data and label
+        path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/dataloader_test"
+        np.save(os.path.join(path, "{}_data.npy".format(test_batch['pid'], idx)), data[idx][0])
+        np.save(os.path.join(path, "{}_label.npy".format(test_batch['pid'], idx)), seg[idx][0])
     print(test_batch['class_target'][idx])
     print(test_batch['bb_target'][idx])
 
