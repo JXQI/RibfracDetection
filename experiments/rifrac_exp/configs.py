@@ -28,19 +28,20 @@ class configs(DefaultConfigs):
         #    Preprocessing      #
         #########################
 
-        self.root_dir = '/home/gregor/networkdrives/E130-Personal/Goetz/Datenkollektive/Lungendaten/Nodules_LIDC_IDRI'
-        self.raw_data_dir = '{}/new_nrrd'.format(self.root_dir)
-        self.pp_dir = '/media/gregor/HDD2TB/data/lidc/lidc_mdt'
+        self.root_dir = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/medical_test'
+        self.raw_data_dir = '{}/data_npy'.format(self.root_dir)
+        self.pp_dir = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/medical_test'
         self.target_spacing = (0.7, 0.7, 1.25)
 
         #########################
         #         I/O           #
         #########################
 
-
         # one out of [2, 3]. dimension the model operates in.
         self.dim = 3
 
+        # class : if True mul class ,else sinnal class
+        self.mul_class=False
         # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_unet', 'ufrcnn'].
         self.model = 'retina_unet'
 
@@ -50,9 +51,9 @@ class configs(DefaultConfigs):
         self.select_prototype_subset = None
 
         # path to preprocessed data.
-        self.pp_name = 'lidc_mdt'
+        self.pp_name = 'data_npy'
         self.input_df_name = 'info_df.pickle'
-        self.pp_data_path = '/media/gregor/HDD2TB/data/lidc/{}'.format(self.pp_name)
+        self.pp_data_path = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/medical_test/{}'.format(self.pp_name)
         self.pp_test_data_path = self.pp_data_path #change if test_data in separate folder.
 
         # settings for deployment in cloud.
@@ -338,6 +339,7 @@ class configs(DefaultConfigs):
             self.anchor_matching_iou = 0.5
 
             # if 'True', seg loss distinguishes all classes, else only foreground vs. background (class agnostic).
+            self.class_specific_seg_flag=False
             self.num_seg_classes = 3 if self.class_specific_seg_flag else 2
 
             if self.model == 'retina_unet':
