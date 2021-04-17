@@ -66,7 +66,6 @@ def pp_patient(inputs):
 
     df = pd.read_csv(os.path.join(cf.root_dir, cf.csv_file), sep=',')
     df = df[df.public_id == pid]
-
     # read label.nii.gz
     final_rois = np.zeros_like(img_arr, dtype=np.uint8)
     label=[]
@@ -78,7 +77,10 @@ def pp_patient(inputs):
             temp[temp!=i]=0
             roi_arr = resample_array(temp, roi.GetSpacing(), cf.target_spacing)
             final_rois[roi_arr>0]=i
-            label.append(i)
+            label_code=df[df.label_id==i].label_code.values[0]
+            if label_code==-1:
+                label_code=5
+            label.append(label_code)
     mal_labels = np.array(label)
     fg_slices = [ii for ii in np.unique(np.argwhere(final_rois != 0)[:, 0])]    # get slice idx
     assert len(mal_labels)+1 == len(np.unique(final_rois)), [len(mal_labels), np.unique(final_rois), pid]
@@ -104,6 +106,8 @@ def aggregate_meta_info(exp_dir):
 if __name__ == "__main__":
 
     paths = [os.path.join(cf.raw_data_dir, ii) for ii in os.listdir(cf.raw_data_dir) if ii.endswith(".nii.gz")]
+
+    paths=['/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/image/RibFrac427-image.nii.gz']
 
     if not os.path.exists(cf.pp_dir):
         os.mkdir(cf.pp_dir)
