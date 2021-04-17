@@ -22,17 +22,15 @@ from default_configs import DefaultConfigs
 
 class configs(DefaultConfigs):
 
-    def __init__(self, server_env=None):
+    def __init__(self, server_env=False):
 
         #########################
         #    Preprocessing      #
         #########################
 
-        self.root_dir = '/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac'
-        self.raw_data_dir = '{}/image'.format(self.root_dir)
-        self.raw_label_dir = '{}/label'.format(self.root_dir)
-        self.csv_file='{}/ribfrac-val-info.csv'.format(self.root_dir)
-        self.pp_dir = '{}/data_npy'.format(self.root_dir)
+        self.root_dir = '/home/gregor/networkdrives/E130-Personal/Goetz/Datenkollektive/Lungendaten/Nodules_LIDC_IDRI'
+        self.raw_data_dir = '{}/new_nrrd'.format(self.root_dir)
+        self.pp_dir = '/media/gregor/HDD2TB/data/lidc/lidc_mdt'
         self.target_spacing = (0.7, 0.7, 1.25)
 
         #########################
@@ -43,21 +41,18 @@ class configs(DefaultConfigs):
         # one out of [2, 3]. dimension the model operates in.
         self.dim = 3
 
-        # task: mul class or singal class ,if true,mul class ,else singal
-        self.mul_class=False
-
-        # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_unet', 'ufrcnn', 'detection_unet'].
+        # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_unet', 'ufrcnn'].
         self.model = 'retina_unet'
 
         DefaultConfigs.__init__(self, self.model, server_env, self.dim)
 
         # int [0 < dataset_size]. select n patients from dataset for prototyping. If None, all data is used.
-        self.select_prototype_subset = 100
+        self.select_prototype_subset = None
 
         # path to preprocessed data.
-        self.pp_name = 'data_npy'   # .npy file
+        self.pp_name = 'lidc_mdt'
         self.input_df_name = 'info_df.pickle'
-        self.pp_data_path = '/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/{}'.format(self.pp_name)
+        self.pp_data_path = '/media/gregor/HDD2TB/data/lidc/{}'.format(self.pp_name)
         self.pp_test_data_path = self.pp_data_path #change if test_data in separate folder.
 
         # settings for deployment in cloud.
@@ -90,7 +85,7 @@ class configs(DefaultConfigs):
         self.batch_sample_slack = 0.2
 
         # set 2D network to operate in 3D images.
-        self.merge_2D_to_3D_preds = True
+        self.merge_2D_to_3D_preds = self.dim == 2
 
         # feed +/- n neighbouring slices into channel dimension. set to None for no context.
         self.n_3D_context = None
@@ -106,6 +101,7 @@ class configs(DefaultConfigs):
         self.end_filts = self.start_filts * 4 if self.dim == 2 else self.start_filts * 2
         self.res_architecture = 'resnet50' # 'resnet101' , 'resnet50'
         self.norm = None # one of None, 'instance_norm', 'batch_norm'
+        # 0 for no weight decay
         self.weight_decay = 0
 
         # one of 'xavier_uniform', 'xavier_normal', or 'kaiming_normal', None (=default = 'kaiming_uniform')
@@ -115,18 +111,27 @@ class configs(DefaultConfigs):
         #  Schedule / Selection #
         #########################
 
-        self.num_epochs = 1
+        self.num_epochs = 100
         self.num_train_batches = 200 if self.dim == 2 else 200
         self.batch_size = 20 if self.dim == 2 else 8
 
         self.do_validation = True
         # decide whether to validate on entire patient volumes (like testing) or sampled patches (like training)
-        # the former is morge accurate, while the latter is faster (depending on volume size)
+        # the former is more accurate, while the latter is faster (depending on volume size)
         self.val_mode = 'val_sampling' # one of 'val_sampling' , 'val_patient'
         if self.val_mode == 'val_patient':
             self.max_val_patients = 50  # if 'None' iterates over entire val_set once.
         if self.val_mode == 'val_sampling':
             self.num_val_batches = 50
+
+        self.optimizer = "Adam"
+
+        # set dynamic_lr_scheduling to True to apply LR scheduling with below settings.
+        self.dynamic_lr_scheduling = False
+        self.lr_decay_factor = 0.25
+        self.scheduling_patience = np.ceil(16000 / (self.num_train_batches * self.batch_size))
+        self.scheduling_criterion = 'malignant_ap'
+        self.scheduling_mode = 'min' if "loss" in self.scheduling_criterion else 'max'
 
         #########################
         #   Testing / Plotting  #
@@ -139,11 +144,11 @@ class configs(DefaultConfigs):
         self.min_save_thresh = 0 if self.dim == 2 else 0
 
         self.report_score_level = ['patient', 'rois']  # choose list from 'patient', 'rois'
-        self.class_dict = {1: 'rifrac'}  # 0 is background.
-        self.patient_class_of_interest = 1  # patient metrics are only plotted for one class.
+        self.class_dict = {1: 'benign', 2: 'malignant'}  # 0 is background.
+        self.patient_class_of_interest = 2  # patient metrics are only plotted for one class.
         self.ap_match_ious = [0.1]  # list of ious to be evaluated for ap-scoring.
 
-        self.model_selection_criteria = ['rifrac_ap'] # criteria to average over for saving epochs.
+        self.model_selection_criteria = ['malignant_ap', 'benign_ap'] # criteria to average over for saving epochs.
         self.min_det_thresh = 0.1  # minimum confidence value to select predictions for evaluation.
 
         # threshold for clustering predictions together (wcs = weighted cluster scoring).
@@ -210,7 +215,7 @@ class configs(DefaultConfigs):
         # if <1, false positive predictions in foreground are penalized less.
         self.fp_dice_weight = 1 if self.dim == 2 else 1
 
-        self.wce_weights = [1, 1, 1]
+        self.wce_weights = [0.3, 1, 1]
         self.detection_min_confidence = self.min_det_thresh
 
         # if 'True', loss distinguishes all classes, else only foreground vs. background (class agnostic).
@@ -233,7 +238,7 @@ class configs(DefaultConfigs):
         self.n_plot_rpn_props = 5 if self.dim == 2 else 30
 
         # number of classes for head networks: n_foreground_classes + 1 (background)
-        self.head_classes = 2
+        self.head_classes = 3
 
         # seg_classes hier refers to the first stage classifier (RPN)
         self.num_seg_classes = 2  # foreground vs. background
@@ -316,7 +321,7 @@ class configs(DefaultConfigs):
             self.num_seg_classes = 3 if self.class_specific_seg_flag else 2
             self.frcnn_mode = True
 
-        if self.model == 'retina_net' or self.model == 'retina_unet' or self.model == 'prob_detector':
+        if self.model == 'retina_net' or self.model == 'retina_unet':
             # implement extra anchor-scales according to retina-net publication.
             self.rpn_anchor_scales['xy'] = [[ii[0], ii[0] * (2 ** (1 / 3)), ii[0] * (2 ** (2 / 3))] for ii in
                                             self.rpn_anchor_scales['xy']]
@@ -333,7 +338,6 @@ class configs(DefaultConfigs):
             self.anchor_matching_iou = 0.5
 
             # if 'True', seg loss distinguishes all classes, else only foreground vs. background (class agnostic).
-            self.class_specific_seg_flag=False
             self.num_seg_classes = 3 if self.class_specific_seg_flag else 2
 
             if self.model == 'retina_unet':
