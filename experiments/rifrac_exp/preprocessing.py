@@ -107,12 +107,10 @@ if __name__ == "__main__":
 
     paths = [os.path.join(cf.raw_data_dir, ii) for ii in os.listdir(cf.raw_data_dir) if ii.endswith(".nii.gz")]
 
-    paths=['/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/image/RibFrac427-image.nii.gz']
-
     if not os.path.exists(cf.pp_dir):
         os.mkdir(cf.pp_dir)
 
-    pool = Pool(processes=4)
+    pool = Pool(processes=2)
     p1 = pool.map(pp_patient, enumerate(paths), chunksize=1)
     pool.close()
     pool.join()
