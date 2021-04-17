@@ -183,7 +183,6 @@ def create_data_gen_pipeline(patient_data, cf, is_training=True):
     :param is_training: (optional) whether to perform data augmentation (training) or not (validation/testing)
     :return: multithreaded_generator
     """
-
     # create instance of batch generator as first element in pipeline.
     data_gen = BatchGenerator(patient_data, batch_size=cf.batch_size, cf=cf)
 
@@ -229,17 +228,14 @@ class BatchGenerator(SlimDataLoaderBase):
         self.p_fg = 0.5
 
     def generate_train_batch(self):
-
         batch_data, batch_segs, batch_pids, batch_targets, batch_patient_labels = [], [], [], [], []
         class_targets_list =  [v['class_target'] for (k, v) in self._data.items()]
-
         if self.cf.head_classes > 2:
             # samples patients towards equilibrium of foreground classes on a roi-level (after randomly sampling the ratio "batch_sample_slack).
             batch_ixs = dutils.get_class_balanced_patients(
                 class_targets_list, self.batch_size, self.cf.head_classes - 1, slack_factor=self.cf.batch_sample_slack)
         else:
             batch_ixs = np.random.choice(len(class_targets_list), self.batch_size)
-
         patients = list(self._data.items())
 
         for b in batch_ixs:

@@ -110,7 +110,7 @@ if __name__ == "__main__":
     if not os.path.exists(cf.pp_dir):
         os.mkdir(cf.pp_dir)
 
-    pool = Pool(processes=2)
+    pool = Pool(processes=8)
     p1 = pool.map(pp_patient, enumerate(paths), chunksize=1)
     pool.close()
     pool.join()
