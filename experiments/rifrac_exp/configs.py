@@ -28,10 +28,10 @@ class configs(DefaultConfigs):
         #    Preprocessing      #
         #########################
 
-        self.root_dir = '/Users/jinxiaoqiang/jinxiaoqiang/数据集/Bone/ribfrac'
+        self.root_dir = '/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac'
         self.raw_data_dir = '{}/image'.format(self.root_dir)
         self.raw_label_dir = '{}/label'.format(self.root_dir)
-        self.csv_file='{}/test_process.csv'.format(self.root_dir)
+        self.csv_file='{}/ribfrac-val-info.csv'.format(self.root_dir)
         self.pp_dir = '{}/data_npy'.format(self.root_dir)
         self.target_spacing = (0.7, 0.7, 1.25)
 
@@ -41,7 +41,10 @@ class configs(DefaultConfigs):
 
 
         # one out of [2, 3]. dimension the model operates in.
-        self.dim = 2
+        self.dim = 3
+
+        # task: mul class or singal class ,if true,mul class ,else singal
+        self.mul_class=False
 
         # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_unet', 'ufrcnn', 'detection_unet'].
         self.model = 'retina_unet'
@@ -52,9 +55,9 @@ class configs(DefaultConfigs):
         self.select_prototype_subset = 100
 
         # path to preprocessed data.
-        self.pp_name = 'lidc_mdt'
+        self.pp_name = 'data_npy'   # .npy file
         self.input_df_name = 'info_df.pickle'
-        self.pp_data_path = '/media/gregor/HDD2TB/data/lidc/{}'.format(self.pp_name)
+        self.pp_data_path = '/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/{}'.format(self.pp_name)
         self.pp_test_data_path = self.pp_data_path #change if test_data in separate folder.
 
         # settings for deployment in cloud.
@@ -112,7 +115,7 @@ class configs(DefaultConfigs):
         #  Schedule / Selection #
         #########################
 
-        self.num_epochs = 100
+        self.num_epochs = 1
         self.num_train_batches = 200 if self.dim == 2 else 200
         self.batch_size = 20 if self.dim == 2 else 8
 
@@ -136,11 +139,11 @@ class configs(DefaultConfigs):
         self.min_save_thresh = 0 if self.dim == 2 else 0
 
         self.report_score_level = ['patient', 'rois']  # choose list from 'patient', 'rois'
-        self.class_dict = {1: 'benign', 2: 'malignant'}  # 0 is background.
-        self.patient_class_of_interest = 2  # patient metrics are only plotted for one class.
+        self.class_dict = {1: 'rifrac'}  # 0 is background.
+        self.patient_class_of_interest = 1  # patient metrics are only plotted for one class.
         self.ap_match_ious = [0.1]  # list of ious to be evaluated for ap-scoring.
 
-        self.model_selection_criteria = ['malignant_ap', 'benign_ap'] # criteria to average over for saving epochs.
+        self.model_selection_criteria = ['rifrac_ap'] # criteria to average over for saving epochs.
         self.min_det_thresh = 0.1  # minimum confidence value to select predictions for evaluation.
 
         # threshold for clustering predictions together (wcs = weighted cluster scoring).
@@ -230,7 +233,7 @@ class configs(DefaultConfigs):
         self.n_plot_rpn_props = 5 if self.dim == 2 else 30
 
         # number of classes for head networks: n_foreground_classes + 1 (background)
-        self.head_classes = 3
+        self.head_classes = 2
 
         # seg_classes hier refers to the first stage classifier (RPN)
         self.num_seg_classes = 2  # foreground vs. background
@@ -330,6 +333,7 @@ class configs(DefaultConfigs):
             self.anchor_matching_iou = 0.5
 
             # if 'True', seg loss distinguishes all classes, else only foreground vs. background (class agnostic).
+            self.class_specific_seg_flag=False
             self.num_seg_classes = 3 if self.class_specific_seg_flag else 2
 
             if self.model == 'retina_unet':
