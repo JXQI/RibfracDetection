@@ -28,9 +28,11 @@ class configs(DefaultConfigs):
         #    Preprocessing      #
         #########################
 
-        self.root_dir = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/medical_test'
-        self.raw_data_dir = '{}/data_npy'.format(self.root_dir)
-        self.pp_dir = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/medical_test'
+        self.root_dir = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac'
+        self.raw_data_dir = '{}/image'.format(self.root_dir)
+        self.raw_label_dir = '{}/label'.format(self.root_dir)
+        self.csv_file='ribfrac-val-info.csv'
+        self.pp_dir = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy'
         self.target_spacing = (0.7, 0.7, 1.25)
 
         #########################
@@ -38,7 +40,7 @@ class configs(DefaultConfigs):
         #########################
 
         # one out of [2, 3]. dimension the model operates in.
-        self.dim = 2
+        self.dim = 3
 
         # class : if True mul class ,else sinnal class
         self.mul_class=False
