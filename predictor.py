@@ -156,7 +156,6 @@ class Predictor:
 
             with torch.no_grad():
                 for i in range(batch_gen['n_test']):
-
                     batch = next(batch_gen['test'])
 
                     # store batch info in patient entry of results dict.

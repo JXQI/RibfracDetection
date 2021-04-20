@@ -67,6 +67,10 @@ if __name__ == '__main__':
     # set the top-n-epochs to be saved for temporal averaging in testing.
     cf.save_n_models = 1
     cf.test_n_epochs = 1
+    # disable the re-sampling of mask proposals to original size for speed-up.
+    # since evaluation is detection-driven (box-matching) and not instance segmentation-driven (iou-matching),
+    # mask-outputs are optional.
+    cf.return_masks_in_test = True
 
     logger = utils.get_logger(exp_dir, server_env)
     data_loader = utils.import_module('dl', os.path.join(exp_source, 'data_loader.py'))

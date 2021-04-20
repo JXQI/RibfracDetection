@@ -48,12 +48,17 @@ def show_batchdata(root_dir,pid):
 
 def read_pick(path):
     df=pd.read_pickle(path)
+    print(len(df[0][0]['boxes']))
+    print(df[0][0]['boxes'][0][-1])
     seg=np.array(df[0][0]['seg_preds'][0][0],dtype=np.int8)
     print(seg.shape)
-    seg[seg>=0.5]=1
-    seg[seg<0.5]=0
+    gt_label=np.zeros(seg.shape)
+    coordid=df[0][0]['boxes'][0][-1]['box_coords']
+    gt_label[coordid[-2]:coordid[-1],coordid[3]:coordid[2],coordid[1]:coordid[0]]=1
+    seg[seg>0]=2
     print(np.unique(seg))
-    np.save("Rib500.npy",seg)
+    np.save("Rib500_seg.npy",seg)
+    np.save("Rib500.npy",gt_label)
 
 def Dict2df(path):
     df = pd.DataFrame(columns=['pid', 'class_target', 'spacing', 'fg_slices'])
@@ -93,5 +98,8 @@ if __name__=="__main__":
     dstpath='./examples'
     path='Rib500.npy'
     dpy2niigz(path,dstpath)
+    dstpath = './examples'
+    path = 'Rib500_seg.npy'
+    dpy2niigz(path, dstpath)
     path='/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy/RibFrac500_img.npy'
     dpy2niigz(path,dstpath)
