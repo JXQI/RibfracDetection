@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import numpy as np
 import SimpleITK as sitk
+import pickle
 import configs
 cf = configs.configs()
 
@@ -47,7 +48,13 @@ def show_batchdata(root_dir,pid):
 
 def read_pick(path):
     df=pd.read_pickle(path)
-    print(df.columns)
+    print(df)
+
+def Dict2df(path):
+    df = pd.DataFrame(columns=['pid', 'class_target', 'spacing', 'fg_slices'])
+    with open(path,'rb') as handle:
+        df.loc[len(df)] = pickle.load(handle)
+    print(df)
 
 if __name__=="__main__":
     # # show the whole single npy file
@@ -64,6 +71,10 @@ if __name__=="__main__":
     # pid=428
     # show_batchdata(path,pid)
 
-    # read pickle file
-    path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy/info_df.pickle"
-    read_pick(path)
+    # # read pickle file
+    # path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy/meta_info_RibFrac421.pickle"
+    # read_pick(path)
+
+    # dict2DF
+    path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy/meta_info_RibFrac421.pickle"
+    Dict2df(path)
