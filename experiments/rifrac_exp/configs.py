@@ -44,6 +44,9 @@ class configs(DefaultConfigs):
 
         # class : if True mul class ,else sinnal class
         self.mul_class=False
+        self.n_cv_splits = 1
+        # perform mirroring at test time. (only XY. Z not done to not blow up predictions times)
+        self.test_aug = False
         # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_unet', 'ufrcnn'].
         self.model = 'retina_unet'
 
@@ -55,7 +58,7 @@ class configs(DefaultConfigs):
         # path to preprocessed data.
         self.pp_name = 'data_npy'
         self.input_df_name = 'info_df.pickle'
-        self.pp_data_path = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/medical_test/{}'.format(self.pp_name)
+        self.pp_data_path = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/{}'.format(self.pp_name)
         self.pp_test_data_path = self.pp_data_path #change if test_data in separate folder.
 
         # settings for deployment in cloud.
@@ -114,7 +117,7 @@ class configs(DefaultConfigs):
         #  Schedule / Selection #
         #########################
 
-        self.num_epochs = 5
+        self.num_epochs = 100
         self.num_train_batches = 200 if self.dim == 2 else 200
         self.batch_size = 20 if self.dim == 2 else 8
 
