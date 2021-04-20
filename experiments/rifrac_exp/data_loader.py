@@ -96,7 +96,7 @@ def get_test_generator(cf, logger):
     """
     if cf.hold_out_test_set:
         pp_name = cf.pp_test_name
-        test_ix = None
+        test_ix = [0]
     else:
         pp_name = None
         with open(os.path.join(cf.exp_dir, 'fold_ids.pickle'), 'rb') as handle:
@@ -140,8 +140,6 @@ def load_dataset(cf, logger, subset_ixs=None, pp_data_path=None, pp_name=None):
             copy_data = False
 
         pp_data_path = target_dir
-
-
     p_df = pd.read_pickle(os.path.join(pp_data_path, cf.input_df_name))
     if cf.select_prototype_subset is not None:
         prototype_pids = p_df.pid.tolist()[:cf.select_prototype_subset]
