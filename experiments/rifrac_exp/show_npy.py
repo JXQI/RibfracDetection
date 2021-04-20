@@ -45,6 +45,10 @@ def show_batchdata(root_dir,pid):
     sitk.WriteImage(label_nii, label_nii_gz)
     print("end!")
 
+def read_pick(path):
+    df=pd.read_pickle(path)
+    print(df.columns)
+
 if __name__=="__main__":
     # # show the whole single npy file
     # pid = "421"
@@ -55,8 +59,11 @@ if __name__=="__main__":
     # path=os.path.join(cf.pp_data_path, cf.input_df_name)
     # read_fold_ids(path)
 
-    # show the bacth_data
-    path="/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/dataloader_test"
-    pid=428
-    show_batchdata(path,pid)
+    # # show the bacth_data
+    # path="/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/dataloader_test"
+    # pid=428
+    # show_batchdata(path,pid)
 
+    # read pickle file
+    path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy/info_df.pickle"
+    read_pick(path)
