@@ -168,7 +168,7 @@ class Predictor:
 
                     # call prediction pipeline and store results in dict.
                     results_dict = self.predict_patient(batch)
-                    dict_of_patient_results[batch['pid']]['results_dicts'].append({"boxes": results_dict['boxes']})
+                    dict_of_patient_results[batch['pid']]['results_dicts'].append({"boxes": results_dict['boxes'],"seg_preds": results_dict['seg_preds']})
 
                     if i in plot_batches and not self.patched_patient:
                         # view qualitative results of random test case
@@ -199,7 +199,6 @@ class Predictor:
         # loop over patients again to flatten results across epoch predictions.
         # if provided, add ground truth boxes for evaluation.
         for pid, p_dict in dict_of_patient_results.items():
-
             tmp_ens_list = p_dict['results_dicts']
             results_dict = {}
             # collect all boxes/seg_preds of same batch_instance over temporal instances.
@@ -209,8 +208,8 @@ class Predictor:
 
             # TODO return for instance segmentation:
             # results_dict['seg_preds'] = np.mean(results_dict['seg_preds'], 1)[:, None]
-            # results_dict['seg_preds'] = np.array([[item for d in tmp_ens_list for item in d['seg_preds'][batch_instance]]
-            #                                       for batch_instance in range(len(tmp_ens_list[0]['boxes']))])
+            results_dict['seg_preds'] = np.array([[item for d in tmp_ens_list for item in d['seg_preds'][batch_instance]]
+                                                  for batch_instance in range(len(tmp_ens_list[0]['boxes']))])
 
             # add 3D ground truth boxes for evaluation.
             for b in range(p_dict['patient_bb_target'].shape[0]):

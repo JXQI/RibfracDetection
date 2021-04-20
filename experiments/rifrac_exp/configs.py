@@ -154,11 +154,11 @@ class configs(DefaultConfigs):
         self.min_save_thresh = 0 if self.dim == 2 else 0
 
         self.report_score_level = ['patient', 'rois']  # choose list from 'patient', 'rois'
-        self.class_dict = {1: 'benign', 2: 'malignant'}  # 0 is background.
-        self.patient_class_of_interest = 2  # patient metrics are only plotted for one class.
+        self.class_dict = {1: 'rifrac'}  # 0 is background.
+        self.patient_class_of_interest = 1  # patient metrics are only plotted for one class.
         self.ap_match_ious = [0.1]  # list of ious to be evaluated for ap-scoring.
 
-        self.model_selection_criteria = ['malignant_ap', 'benign_ap'] # criteria to average over for saving epochs.
+        self.model_selection_criteria = ['rifrac_ap'] # criteria to average over for saving epochs.
         self.min_det_thresh = 0.1  # minimum confidence value to select predictions for evaluation.
 
         # threshold for clustering predictions together (wcs = weighted cluster scoring).

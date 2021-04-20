@@ -48,13 +48,23 @@ def show_batchdata(root_dir,pid):
 
 def read_pick(path):
     df=pd.read_pickle(path)
-    print(df)
+    seg=np.array(df[0][0]['seg_preds'][0][0],dtype=np.int8)
+    print(seg.shape)
+    seg[seg>=0.5]=1
+    seg[seg<0.5]=0
+    print(np.unique(seg))
+    np.save("Rib500.npy",seg)
 
 def Dict2df(path):
     df = pd.DataFrame(columns=['pid', 'class_target', 'spacing', 'fg_slices'])
     with open(path,'rb') as handle:
         df.loc[len(df)] = pickle.load(handle)
     print(df)
+def dpy2niigz(path,dstpath):
+    image_nii = sitk.GetImageFromArray(np.load(path))
+    image_nii_gz = os.path.join(dstpath,path.split('/')[-1].split('.')[0]+'.nii.gz')
+    sitk.WriteImage(image_nii, image_nii_gz)
+    print("end!")
 
 if __name__=="__main__":
     # # show the whole single npy file
@@ -71,10 +81,17 @@ if __name__=="__main__":
     # pid=428
     # show_batchdata(path,pid)
 
-    # # read pickle file
-    # path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy/meta_info_RibFrac421.pickle"
-    # read_pick(path)
+    # read pickle file
+    path = "../rifrac_test/fold_0/raw_pred_boxes_hold_out_list.pickle"
+    read_pick(path)
 
-    # dict2DF
-    path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy/meta_info_RibFrac421.pickle"
-    Dict2df(path)
+    # # dict2DF
+    # path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy/meta_info_RibFrac421.pickle"
+    # Dict2df(path)
+
+    # npy2niigz
+    dstpath='./examples'
+    path='Rib500.npy'
+    dpy2niigz(path,dstpath)
+    path='/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy/RibFrac500_img.npy'
+    dpy2niigz(path,dstpath)
