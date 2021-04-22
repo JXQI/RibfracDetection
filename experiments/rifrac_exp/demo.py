@@ -71,6 +71,8 @@ if __name__ == '__main__':
     # since evaluation is detection-driven (box-matching) and not instance segmentation-driven (iou-matching),
     # mask-outputs are optional.
     cf.return_masks_in_test = True
+    # if save batch data
+    cf.save_batch_data=True
 
     logger = utils.get_logger(exp_dir, server_env)
     data_loader = utils.import_module('dl', os.path.join(exp_source, 'data_loader.py'))

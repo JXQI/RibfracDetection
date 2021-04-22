@@ -158,6 +158,10 @@ class Predictor:
                 for i in range(batch_gen['n_test']):
                     batch = next(batch_gen['test'])
 
+                    if self.cf.save_batch_data:
+                        out_string=str(batch['pid'])+'batch'
+                        with open(os.path.join(self.cf.fold_dir, '{}.pickle'.format(out_string)), 'wb') as handle:
+                            pickle.dump(batch, handle)
                     # store batch info in patient entry of results dict.
                     if rank_ix == 0:
                         dict_of_patient_results[batch['pid']] = {}
