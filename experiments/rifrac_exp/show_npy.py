@@ -71,10 +71,14 @@ def dpy2niigz(path,dstpath):
     sitk.WriteImage(image_nii, image_nii_gz)
     print("end!")
 
-# read a batch_data pickle
+"""
+    function: read a batch_data pickle
+    return: index,coords (in dstpath will product batch_index data and label nii.gz file)
+"""
 def read_batchData_pickle(path,dstpath):
     df = pd.read_pickle(path)
     print(df.keys())
+    print("original_img_shape={}".format(df['original_img_shape']))
     number=len(df['data'])
     for i in range(number):
         seg=np.array(df['seg'][i][0],)
@@ -95,7 +99,28 @@ def read_batchData_pickle(path,dstpath):
     # index,coord
     return i,df['patch_crop_coords'][i]
 
+'''
+    function: get nii.gz file from test result named raw_pred_boxes_hold_out_list.pickle
+    args: 
+        path: path of .pickle, index: coord of boxes from origin image, dstpath: where to save results
+    return: Rifrac*_index_test_image.nii.gz , Rifrac*_index_test_label.nii.gz
+'''
+def read_batchData_pickle(path,dstpath,index=0):
+    df=pd.read_pickle(path)
+    result_dict=df[0]
+    result=result_dict[0]
+    pid=result_dict[1]
+    print(pid,result.keys())
+    boxes=result['boxes'][0]
+    segs=np.array(result['seg_preds'][0][0],dtype=np.int8) #TODO: why?
+    print(len(boxes),len(segs))
+    print(segs.shape)
+    # must z,x,y
+    segs=np.transpose(segs,axes=(2,1,0))
+    print(segs.shape)
 
+    label_nii = sitk.GetImageFromArray(segs)
+    sitk.WriteImage(label_nii, os.path.join(dstpath, pid + '_test.nii.gz'))
 
 if __name__=="__main__":
     # # show the whole single npy file
@@ -130,8 +155,14 @@ if __name__=="__main__":
     # path='/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy/RibFrac500_img.npy'
     # dpy2niigz(path,dstpath)
 
-    # read a batch_data pickle
-    path="../rifrac_test/fold_0/RibFrac500batch.pickle"
-    dst="./examples"
-    index,coords=read_batchData_pickle(path,dst)
-    print(index,coords)
+    # # read a batch_data pickle
+    # path="../rifrac_test/fold_0/RibFrac500batch.pickle"
+    # dst="./examples"
+    # index,coords=read_batchData_pickle(path,dst)
+    # print(index,coords)
+
+    # get batch result of test
+    path="../rifrac_test/fold_0/raw_pred_boxes_hold_out_list.pickle"
+    index=0
+    dstpath="./examples"
+    read_batchData_pickle(path,dstpath,index)
