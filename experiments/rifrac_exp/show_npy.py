@@ -102,19 +102,49 @@ def read_batchData_pickle(path,dstpath):
 '''
     function: get nii.gz file from test result named raw_pred_boxes_hold_out_list.pickle
     args: 
+        orgindata: image.nii.gz file path
         path: path of .pickle, index: coord of boxes from origin image, dstpath: where to save results
     return: Rifrac*_index_test_image.nii.gz , Rifrac*_index_test_label.nii.gz
 '''
-def read_batchData_pickle(path,dstpath,index=0):
+def read_batchData_pickle(orgindata,path,dstpath,index=0):
     df=pd.read_pickle(path)
     result_dict=df[0]
     result=result_dict[0]
     pid=result_dict[1]
     print(pid,result.keys())
+
+    # [box_0, ...]
     boxes=result['boxes'][0]
+    num_gt=0
+    det_num=0
+    gt_bbox_list=[] # gt bbox (y1,y2,x1,x2,z1,z2)
+    det_bbox_list=[] # test result bbox
+    for i in range(len(boxes)):
+        if(boxes[i]["box_type"]=='gt'):
+            num_gt+=1
+            gt_bbox_list.append(boxes[i])
+        elif(boxes[i]["box_type"]=='det'):
+            det_num+=1
+            det_bbox_list.append(boxes[i])
+        else:
+            print(boxes[i]["box_type"])
+    print("box_num={},gt_num={},det_num={}".format(len(boxes),num_gt,det_num))
+    # set gt_bbox to origin shape , and produce new pid_boxGt_nii.gz
+    # (z,y,x)
+    data=np.load(os.path.join(orgindata,'{}_img.npy'.format(pid)))
+    data_nii=sitk.GetImageFromArray(data)
+    sitk.WriteImage(data_nii,os.path.join(dstpath,"{}_image.nii.gz".format(pid)))
+    bbox_gd=np.zeros(data.shape)
+
+    print("gt bbox:\n{}".format(gt_bbox_list))
+    for value in gt_bbox_list:
+        item=value["box_coords"].tolist()
+        bbox_gd[item[-2]:item[-1],item[0]:item[2],item[1]:item[3]]=1
+    bbox_gd_nii=sitk.GetImageFromArray(bbox_gd)
+    sitk.WriteImage(bbox_gd_nii,os.path.join(dstpath,"{}_bboxGt.nii.gz".format(pid)))
+    print("bbox_gd shape is {}".format(bbox_gd.shape))
+    # seg(b, 1, y, x, (z))
     segs=np.array(result['seg_preds'][0][0],dtype=np.int8) #TODO: why?
-    print(len(boxes),len(segs))
-    print(segs.shape)
     # must z,x,y
     segs=np.transpose(segs,axes=(2,1,0))
     print(segs.shape)
@@ -162,7 +192,8 @@ if __name__=="__main__":
     # print(index,coords)
 
     # get batch result of test
+    originpath="/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy"
     path="../rifrac_test/fold_0/raw_pred_boxes_hold_out_list.pickle"
     index=0
     dstpath="./examples"
-    read_batchData_pickle(path,dstpath,index)
+    read_batchData_pickle(originpath,path,dstpath,index)
