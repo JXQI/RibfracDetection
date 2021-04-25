@@ -252,6 +252,11 @@ class Predictor:
                 assert results_per_patient[ix][1] == final_patient_box_results[ix][1], "should be same pid"
                 results_per_patient[ix][0]["boxes"] = final_patient_box_results[ix][0]
 
+            # save out raw predictions.
+            out_string = 'final_pred_boxes_hold_out_list' if self.cf.save_final_result else 'final_pred_boxes_list'
+            with open(os.path.join(self.cf.fold_dir, '{}.pickle'.format(out_string)), 'wb') as handle:
+                pickle.dump(results_per_patient, handle)
+
             return results_per_patient
 
 

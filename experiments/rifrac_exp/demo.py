@@ -73,6 +73,8 @@ if __name__ == '__main__':
     cf.return_masks_in_test = True
     # if save batch data
     cf.save_batch_data=True
+    # if save final result
+    cf.save_final_result=True
 
     logger = utils.get_logger(exp_dir, server_env)
     data_loader = utils.import_module('dl', os.path.join(exp_source, 'data_loader.py'))
