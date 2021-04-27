@@ -104,18 +104,20 @@ def read_batchData_pickle(path,dstpath):
         result: final_result,raw_result []
         origin_shape: shape of origin nii.gz (z,y,x)
 """
-def deal_result(result,origin_shape,gd_box=False):
+def deal_result(result,origin_shape,scores,gd_box=False):
     boxes=result[0]['boxes'][0]
     pid = result[1]
+    print("boxes's keys={}".format(boxes[0].keys()))
     gt_bbox_list=[] # gt bbox (y1,y2,x1,x2,z1,z2)
     det_bbox_list=[] # test result bbox
     for i in range(len(boxes)):
         if(boxes[i]["box_type"]=='gt'):
             gt_bbox_list.append(boxes[i])
-        elif(boxes[i]["box_type"]=='det'):
+        elif(boxes[i]["box_type"]=='det' and boxes[i]["box_score"]>scores):
             det_bbox_list.append(boxes[i])
         else:
-            print(boxes[i]["box_type"])
+            pass
+            # print(boxes[i]["box_type"])
     print("box_num={},gt_num={},det_num={}".format(len(boxes),len(gt_bbox_list),len(det_bbox_list)))
     # to nii.gz
     det_box_name="bboxDet_raw.nii.gz" if gd_box else "bboxDet_final.nii.gz"
@@ -145,7 +147,7 @@ def deal_result(result,origin_shape,gd_box=False):
         raw_result: path of .pickle, index: coord of boxes from origin image, dstpath: where to save results
     return: Rifrac*_index_test_image.nii.gz , Rifrac*_index_test_label.nii.gz
 '''
-def read_batchData_pickle(orgindata,raw_result,final_result,dstpath,index=0):
+def read_batchData_pickle(orgindata,raw_result,final_result,dstpath,scores=0.1,index=0):
     df=pd.read_pickle(raw_result)
     pid=df[0][1]
     # (z,y,x)
@@ -154,12 +156,25 @@ def read_batchData_pickle(orgindata,raw_result,final_result,dstpath,index=0):
     sitk.WriteImage(data_nii,os.path.join(dstpath,"{}_image.nii.gz".format(pid)))
     #deal with raw_result
     print("deal raw_result:")
-    deal_result(df[0], data.shape, gd_box=True)
+    deal_result(df[0], data.shape,scores, gd_box=True)
     # deal with final_result
     print("deal final_result:")
     df = pd.read_pickle(final_result)
-    deal_result(df[0],data.shape,gd_box=False)
+    deal_result(df[0],data.shape,scores,gd_box=False)
     print("deal end!")
+'''
+    function:
+        deal with the result of metric
+    args: .pickle file
+'''
+def deal_metrics(file):
+    df = pd.read_pickle(file)
+    print(df.head(1))
+    print(df[df.det_type=='det_tp'])
+    scores=np.array(df.pred_score)
+    print(scores[scores>0.3].shape)
+
+
 
 if __name__=="__main__":
     # # show the whole single npy file
@@ -205,7 +220,13 @@ if __name__=="__main__":
     raw_result="../rifrac_test/fold_0/raw_pred_boxes_hold_out_list.pickle"
     final_result="../rifrac_test/fold_0/final_pred_boxes_hold_out_list.pickle"
     index=0
+    # detele the less than scores
+    scores=0.1
     dstpath="./demo_result"
     if not os.path.isdir(dstpath):
         os.makedirs(dstpath)
-    read_batchData_pickle(originpath,raw_result,final_result,dstpath,index)
+    read_batchData_pickle(originpath,raw_result,final_result,dstpath,scores,index)
+
+    # # deal with metrics
+    # file="../rifrac_test/test/fold_0_test_df.pickle"
+    # deal_metrics(file)
