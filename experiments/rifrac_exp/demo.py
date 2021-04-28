@@ -19,7 +19,7 @@ import shutil
 import pandas as pd
 import pickle
 
-def test(logger):
+def test(logger,result_exist=None):
     """
     perform testing for a given fold (or hold out set). save stats in evaluator.
     """
@@ -27,8 +27,11 @@ def test(logger):
     net = model.net(cf, logger).cuda()
     test_predictor = Predictor(cf, net, logger, mode='test')
     test_evaluator = Evaluator(cf, logger, mode='test')
-    batch_gen = data_loader.get_test_generator(cf, logger)
-    test_results_list = test_predictor.predict_test_set(batch_gen, return_results=True)
+    if result_exist is None:
+        batch_gen = data_loader.get_test_generator(cf, logger)
+        test_results_list = test_predictor.predict_test_set(batch_gen, return_results=True)
+    else:
+        test_results_list=pd.read_pickle(result_exist)
     test_evaluator.evaluate_predictions(test_results_list)
     test_evaluator.score_test_df()
 
@@ -82,5 +85,7 @@ if __name__ == '__main__':
 
     logger.info("loaded model from {}".format(cf.model_path))
 
+    # final_result is exist
+    final_result="../rifrac_test/fold_0/final_pred_boxes_hold_out_list.pickle"
     with torch.cuda.device('cuda:0'):
-        test(logger)
+        test(logger,final_result)
