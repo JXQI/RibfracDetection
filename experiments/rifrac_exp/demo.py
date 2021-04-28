@@ -88,13 +88,15 @@ if __name__ == '__main__':
 
     # final_result is exist
     # final_result="../rifrac_test/fold_0/final_pred_boxes_hold_out_list.pickle"
-    final_result=None
-    with torch.cuda.device('cuda:0'):
-        test(logger,final_result)
+    # final_result=None
+    # with torch.cuda.device('cuda:0'):
+    #     test(logger,final_result)
 
     # mv the result file to dst
     raw_result=os.path.join(cf.fold_dir,"raw_pred_boxes_hold_out_list.pickle")
     final_result=os.path.join(cf.fold_dir,"final_pred_boxes_hold_out_list.pickle")
+
+    batch_pickle=os.path.join(cf.fold_dir,"RibFrac{}batch.pickle".format(file_pid))
 
     test_metric_pickle=os.path.join(exp_dir,'test',"fold_0_test_df.pickle")
     test_metric_txt=os.path.join(exp_dir,'test',"results.txt")
@@ -103,6 +105,7 @@ if __name__ == '__main__':
     shutil.copy(final_result,test_path)
     shutil.copy(test_metric_pickle,test_path)
     shutil.copy(test_metric_txt,test_path)
+    shutil.copy(batch_pickle,test_path)
 
     # calcuate result
     result = test_result(test_path)
