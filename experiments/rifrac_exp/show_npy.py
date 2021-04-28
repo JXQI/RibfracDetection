@@ -3,6 +3,7 @@ import os
 import numpy as np
 import SimpleITK as sitk
 import pickle
+from os.path import join
 import configs
 cf = configs.configs()
 
@@ -98,46 +99,7 @@ def read_batchData_pickle(path,dstpath):
     print("nii.gz has saved in the {}".format(dstpath))
     # index,coord
     return i,df['patch_crop_coords'][i]
-"""
-    fucntion: deal the result
-    args:
-        result: final_result,raw_result []
-        origin_shape: shape of origin nii.gz (z,y,x)
-"""
-def deal_result(result,origin_shape,scores,gd_box=False):
-    boxes=result[0]['boxes'][0]
-    pid = result[1]
-    print("boxes's keys={}".format(boxes[0].keys()))
-    gt_bbox_list=[] # gt bbox (y1,y2,x1,x2,z1,z2)
-    det_bbox_list=[] # test result bbox
-    for i in range(len(boxes)):
-        if(boxes[i]["box_type"]=='gt'):
-            gt_bbox_list.append(boxes[i])
-        elif(boxes[i]["box_type"]=='det' and boxes[i]["box_score"]>scores):
-            det_bbox_list.append(boxes[i])
-        else:
-            pass
-            # print(boxes[i]["box_type"])
-    print("box_num={},gt_num={},det_num={}".format(len(boxes),len(gt_bbox_list),len(det_bbox_list)))
-    # to nii.gz
-    det_box_name="bboxDet_raw.nii.gz" if gd_box else "bboxDet_final.nii.gz"
-    if gd_box:
-        bbox_gd=np.zeros(origin_shape)
-        # print("gt bbox:\n{}".format(gt_bbox_list))
-        for value in gt_bbox_list:
-            item=value["box_coords"].tolist()
-            bbox_gd[item[-2]:item[-1],item[0]:item[2],item[1]:item[3]]=1
-        bbox_gd_nii=sitk.GetImageFromArray(bbox_gd)
-        sitk.WriteImage(bbox_gd_nii,os.path.join(dstpath,"{}_bboxGt.nii.gz".format(pid)))
-        print("bbox_gd shape is {}".format(bbox_gd.shape))
-    #  boxes of detect result
-    # print("det_bbox example:\n{}".format(det_bbox_list[-1]))
-    bbox_det=np.zeros(origin_shape)
-    for value in det_bbox_list:
-        item=np.array(value["box_coords"],dtype=int).tolist()
-        bbox_det[item[-2]:item[-1], item[0]:item[2], item[1]:item[3]] = 1
-    bbox_det_nii = sitk.GetImageFromArray(bbox_det)
-    sitk.WriteImage(bbox_det_nii, os.path.join(dstpath, "{}_{}".format(pid,det_box_name)))
+
 
 '''
     function: get nii.gz file from test result named raw_pred_boxes_hold_out_list.pickle
@@ -165,16 +127,117 @@ def read_batchData_pickle(orgindata,raw_result,final_result,dstpath,scores=0.1,i
 '''
     function:
         deal with the result of metric
-    args: .pickle file
+    args: fold_0_test_df.pickle file
 '''
 def deal_metrics(file):
     df = pd.read_pickle(file)
     print(df.head(1))
-    print(df[df.det_type=='det_tp'])
-    scores=np.array(df.pred_score)
-    print(scores[scores>0.3].shape)
+    print("columns={},rows={}".format(df.shape[0],df.shape[1]))
+    det=df.det_type
+    print("det={}".format(det.unique()))
+    pred_class=df.pred_class
+    print("pred_class={}".format(pred_class.unique()))
+    all_p=df[df.class_label==1].shape[0]
+    all_n=df[df.class_label==0].shape[0]
+    det_tp = df[df.det_type == 'det_tp'].shape[0]
+    det_fp = df[df.det_type == 'det_fp'].shape[0]
+    print("all_p={},all_n={}".format(all_p,all_n))
+    print("TP={},FP={}".format(det_tp,det_fp))
+    recall = det_tp / float(all_p)
+    precision = det_tp / float(det_tp +det_fp)
+    print("Recall={},Precision={}".format(recall,precision))
 
+"""
+    class:
+        1.product the predict result(.nii.gz) and the ground truth(.nii.gz) [add the boxes to nii.gz file]
+        2.caulcate the recall and precision
+    args:
+        pass
+"""
+class test_result:
+    def __init__(self,path):
+        self.path=path
+    """
+        fucntion: deal the result
+        args:
+            result: final_result,raw_result []
+            origin_shape: shape of origin nii.gz (z,y,x)
+    """
+    def deal_result(self,dstpath,result, origin_shape, scores, gd_box=False):
+        boxes = result[0]['boxes'][0]
+        pid = result[1]
+        print("boxes's keys={}".format(boxes[0].keys()))
+        gt_bbox_list = []  # gt bbox (y1,y2,x1,x2,z1,z2)
+        det_bbox_list = []  # test result bbox
 
+        for i in range(len(boxes)):
+            if (boxes[i]["box_type"] == 'gt'):
+                gt_bbox_list.append(boxes[i])
+            elif (boxes[i]["box_type"] == 'det' and boxes[i]["box_score"] > scores):
+                det_bbox_list.append(boxes[i])
+            else:
+                pass
+                # print(boxes[i]["box_type"])
+        print("box_num={},gt_num={},det_num={}".format(len(boxes), len(gt_bbox_list), len(det_bbox_list)))
+        # to nii.gz
+        det_box_name = "bboxDet_raw.nii.gz" if gd_box else "bboxDet_final.nii.gz"
+        if gd_box:
+            bbox_gd = np.zeros(origin_shape)
+            # print("gt bbox:\n{}".format(gt_bbox_list))
+            for value in gt_bbox_list:
+                item = value["box_coords"].tolist()
+                bbox_gd[item[-2]:item[-1], item[0]:item[2], item[1]:item[3]] = 1
+            bbox_gd_nii = sitk.GetImageFromArray(bbox_gd)
+            sitk.WriteImage(bbox_gd_nii, os.path.join(dstpath, "{}_bboxGt.nii.gz".format(pid)))
+            print("bbox_gd shape is {}".format(bbox_gd.shape))
+        #  boxes of detect result
+        # print("det_bbox example:\n{}".format(det_bbox_list[-1]))
+        bbox_det = np.zeros(origin_shape)
+        for value in det_bbox_list:
+            item = np.array(value["box_coords"], dtype=int).tolist()
+            bbox_det[item[-2]:item[-1], item[0]:item[2], item[1]:item[3]] = 1
+        bbox_det_nii = sitk.GetImageFromArray(bbox_det)
+        sitk.WriteImage(bbox_det_nii, os.path.join(dstpath, "{}_{}".format(pid, det_box_name)))
+
+    '''
+        function: get nii.gz file from test result named raw_pred_boxes_hold_out_list.pickle
+        args: 
+            orgindata: image.nii.gz file path
+            final_result: path of final result (final_pred_boxes_hold_out_list.pickle)
+            raw_result: path of .pickle, index: coord of boxes from origin image, dstpath: where to save results
+        return: Rifrac*_index_test_image.nii.gz , Rifrac*_index_test_label.nii.gz
+    '''
+    def read_batchData_pickle(self,scores=0.1):
+        raw_result=join(self.path,"raw_pred_boxes_hold_out_list.pickle")
+        final_result=join(self.path,"final_pred_boxes_hold_out_list.pickle")
+        dstpath=self.path
+        df = pd.read_pickle(raw_result)
+        pid = df[0][1]
+        # (z,y,x)
+        data = np.load(os.path.join(self.path, '{}_img.npy'.format(pid)))
+        data_nii = sitk.GetImageFromArray(data)
+        sitk.WriteImage(data_nii, os.path.join(dstpath, "{}_image.nii.gz".format(pid)))
+        # deal with raw_result
+        print("deal raw_result:")
+        self.deal_result(dstpath,df[0], data.shape, scores, gd_box=True)
+        # deal with final_result which is after wbs
+        print("deal final_result:")
+        df = pd.read_pickle(final_result)
+        self.deal_result(dstpath,df[0], data.shape, scores, gd_box=False)
+        print("deal end!")
+
+    # cal the recall and precision
+    def deal_metrics(self):
+        fold_0_test_df=join(self.path,"fold_0_test_df.pickle")
+        df = pd.read_pickle(fold_0_test_df)
+        all_p = df[df.class_label == 1].shape[0]
+        all_n = df[df.class_label == 0].shape[0]
+        det_tp = df[df.det_type == 'det_tp'].shape[0]
+        det_fp = df[df.det_type == 'det_fp'].shape[0]
+        recall = det_tp / float(all_p)
+        precision = det_tp / float(det_tp + det_fp)
+        print("all_p={},det_tp={}".format(all_p,det_tp))
+        print("Recall={},Precision={}".format(recall, precision))
 
 if __name__=="__main__":
     # # show the whole single npy file
@@ -215,18 +278,25 @@ if __name__=="__main__":
     # index,coords=read_batchData_pickle(path,dst)
     # print(index,coords)
 
-    # get batch result of test
-    originpath="/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy"
-    raw_result="../rifrac_test/fold_0/raw_pred_boxes_hold_out_list.pickle"
-    final_result="../rifrac_test/fold_0/final_pred_boxes_hold_out_list.pickle"
-    index=0
-    # detele the less than scores
-    scores=0.1
-    dstpath="./demo_result"
-    if not os.path.isdir(dstpath):
-        os.makedirs(dstpath)
-    read_batchData_pickle(originpath,raw_result,final_result,dstpath,scores,index)
+    # # get batch result of test
+    # originpath="/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy"
+    # raw_result="../rifrac_test/fold_0/raw_pred_boxes_hold_out_list.pickle"
+    # final_result="../rifrac_test/fold_0/final_pred_boxes_hold_out_list.pickle"
+    # index=0
+    # # detele the less than scores
+    # scores=0.0
+    # dstpath="./demo_result"
+    # if not os.path.isdir(dstpath):
+    #     os.makedirs(dstpath)
+    # read_batchData_pickle(originpath,raw_result,final_result,dstpath,scores,index)
 
     # # deal with metrics
     # file="../rifrac_test/test/fold_0_test_df.pickle"
     # deal_metrics(file)
+
+    path=os.path.join('./examples','499')
+    result=test_result(path)
+    # product nii.gz
+    result.read_batchData_pickle()
+    # return recall and precision
+    result.deal_metrics()

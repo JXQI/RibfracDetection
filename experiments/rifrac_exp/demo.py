@@ -1,13 +1,12 @@
 import argparse
 import os, warnings
 import time
-
 import torch
-
 import utils.exp_utils as utils
 from evaluator import Evaluator
 from predictor import Predictor
 from plotting import plot_batch_prediction
+from show_npy import test_result
 
 for msg in ["Attempting to set identical bottom==top results",
             "This figure includes Axes that are not compatible with tight_layout",
@@ -35,6 +34,8 @@ def test(logger,result_exist=None):
     test_evaluator.evaluate_predictions(test_results_list)
     test_evaluator.score_test_df()
 
+# test pid
+file_pid = "498"
 if __name__ == '__main__':
     stime = time.time()
     exp_source="../rifrac_exp/"
@@ -43,8 +44,8 @@ if __name__ == '__main__':
     cf = utils.prep_exp(exp_source, exp_dir, server_env, is_training=False, use_stored_settings=True)
 
     # create the new testset
-    file_pid = "500"
-    test_path = "./examples"
+    # file_pid = "499"
+    test_path = os.path.join("./examples",file_pid)
     if not os.path.isdir(test_path):
         os.makedirs(test_path)
     examples_image = os.path.join(cf.pp_data_path,"RibFrac{}_img.npy".format(file_pid))
@@ -86,6 +87,26 @@ if __name__ == '__main__':
     logger.info("loaded model from {}".format(cf.model_path))
 
     # final_result is exist
-    final_result="../rifrac_test/fold_0/final_pred_boxes_hold_out_list.pickle"
+    # final_result="../rifrac_test/fold_0/final_pred_boxes_hold_out_list.pickle"
+    final_result=None
     with torch.cuda.device('cuda:0'):
         test(logger,final_result)
+
+    # mv the result file to dst
+    raw_result=os.path.join(cf.fold_dir,"raw_pred_boxes_hold_out_list.pickle")
+    final_result=os.path.join(cf.fold_dir,"final_pred_boxes_hold_out_list.pickle")
+
+    test_metric_pickle=os.path.join(exp_dir,'test',"fold_0_test_df.pickle")
+    test_metric_txt=os.path.join(exp_dir,'test',"results.txt")
+
+    shutil.copy(raw_result, test_path)
+    shutil.copy(final_result,test_path)
+    shutil.copy(test_metric_pickle,test_path)
+    shutil.copy(test_metric_txt,test_path)
+
+    # calcuate result
+    result = test_result(test_path)
+    # product nii.gz
+    result.read_batchData_pickle()
+    # return recall and precision
+    result.deal_metrics()
