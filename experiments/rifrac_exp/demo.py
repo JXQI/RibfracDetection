@@ -88,9 +88,9 @@ if __name__ == '__main__':
 
     # final_result is exist
     # final_result="../rifrac_test/fold_0/final_pred_boxes_hold_out_list.pickle"
-    # final_result=None
-    # with torch.cuda.device('cuda:0'):
-    #     test(logger,final_result)
+    final_result=None
+    with torch.cuda.device('cuda:0'):
+        test(logger,final_result)
 
     # mv the result file to dst
     raw_result=os.path.join(cf.fold_dir,"raw_pred_boxes_hold_out_list.pickle")

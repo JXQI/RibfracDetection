@@ -47,19 +47,26 @@ def show_batchdata(root_dir,pid):
     sitk.WriteImage(label_nii, label_nii_gz)
     print("end!")
 
-def read_pick(path):
+"""
+    function:
+        produce a seg nii.gz file
+    args:
+        path: raw_pred_boxes_hold_out_list.pickle
+"""
+def load_seg_from_result(path):
     df=pd.read_pickle(path)
     print(len(df[0][0]['boxes']))
     print(df[0][0]['boxes'][0][-1])
     seg=np.array(df[0][0]['seg_preds'][0][0],dtype=np.int8)
     print(seg.shape)
-    gt_label=np.zeros(seg.shape)
-    coordid=df[0][0]['boxes'][0][-1]['box_coords']
-    gt_label[coordid[-2]:coordid[-1],coordid[3]:coordid[2],coordid[1]:coordid[0]]=1
-    seg[seg>0]=2
-    print(np.unique(seg))
-    np.save("Rib500_seg.npy",seg)
-    np.save("Rib500.npy",gt_label)
+    # (z,x,y)
+    seg=np.transpose(seg,axes=(2,1,0))
+    seg_nii=sitk.GetImageFromArray(seg)
+    path=path.split('/')
+    seg_nii_name=join(path[0],path[1],path[2],"RibFrac{}_seg.nii.gz".format(path[2]))
+    print(seg_nii_name)
+    sitk.WriteImage(seg_nii,seg_nii_name)
+
 
 def Dict2df(path):
     df = pd.DataFrame(columns=['pid', 'class_target', 'spacing', 'fg_slices'])
@@ -254,9 +261,9 @@ if __name__=="__main__":
     # pid=428
     # show_batchdata(path,pid)
 
-    # # read pickle file
-    # path = "../rifrac_test/fold_0/raw_pred_boxes_hold_out_list.pickle"
-    # read_pick(path)
+    # read pickle file
+    path = "./examples/498/raw_pred_boxes_hold_out_list.pickle"
+    load_seg_from_result(path)
 
     # # dict2DF
     # path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy/meta_info_RibFrac421.pickle"
@@ -272,11 +279,11 @@ if __name__=="__main__":
     # path='/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy/RibFrac500_img.npy'
     # dpy2niigz(path,dstpath)
 
-    # read a batch_data pickle
-    path="./examples/498/RibFrac498batch.pickle"
-    dst="./examples/498"
-    index,coords=read_a_batchData_pickle(path,dst)
-    print(index,coords)
+    # # read a batch_data pickle
+    # path="./examples/498/RibFrac498batch.pickle"
+    # dst="./examples/498"
+    # index,coords=read_a_batchData_pickle(path,dst)
+    # print(index,coords)
 
     # # get batch result of test
     # originpath="/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy"
