@@ -212,7 +212,7 @@ if __name__ == '__main__':
         logger.info("loaded model from {}".format(cf.model_path))
         if folds is None:
             folds = range(cf.n_cv_splits)
-
+        folds=[0] #TODO: must be change to here,
         with torch.cuda.device(args.cuda_device):
             for fold in folds:
                 cf.fold_dir = os.path.join(cf.exp_dir, 'fold_{}'.format(fold))
