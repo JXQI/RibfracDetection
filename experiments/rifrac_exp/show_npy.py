@@ -29,10 +29,7 @@ def show_npy(root_dir,pid):
 # read the fold_ids.pickle about the split of train/val/test
 def read_fold_ids(path):
     info=pd.read_pickle(path)
-    print(info.columns)
-    print(info["pid"])
-    print(info["class_target"])
-
+    print(info)
 # show the 3D batch-data
 def show_batchdata(root_dir,pid):
     image = os.path.join(root_dir, "RibFrac{}_data.npy".format(pid))
@@ -301,9 +298,9 @@ if __name__=="__main__":
     # root_dir = "/Users/jinxiaoqiang/jinxiaoqiang/数据集/Bone/ribfrac/data_npy/"
     # show_npy(root_dir,pid)
 
-    # # read fold_ids.pickle
-    # path=os.path.join(cf.pp_data_path, cf.input_df_name)
-    # read_fold_ids(path)
+    # read fold_ids.pickle
+    path="../rifrac_RetinaNet_test/fold_ids.pickle"
+    read_fold_ids(path)
 
     # # show the bacth_data
     # path="/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/dataloader_test"
@@ -350,10 +347,10 @@ if __name__=="__main__":
     # file="../rifrac_test/test/fold_0_test_df.pickle"
     # deal_metrics(file)
 
-    # product the test result
-    path=os.path.join('./examples','499')
-    result=test_result(path)
-    # product nii.gz
-    # result.read_batchData_pickle()
-    # return recall and precision
-    result.deal_metrics()
+    # # product the test result
+    # path=os.path.join('./examples','499')
+    # result=test_result(path)
+    # # product nii.gz
+    # # result.read_batchData_pickle()
+    # # return recall and precision
+    # result.deal_metrics()
