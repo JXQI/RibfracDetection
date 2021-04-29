@@ -76,7 +76,7 @@ def dpy2niigz(path,dstpath):
     function: read a batch_data pickle
     return: index,coords (in dstpath will product batch_index data and label nii.gz file)
 """
-def read_batchData_pickle(path,dstpath):
+def read_a_batchData_pickle(path,dstpath):
     df = pd.read_pickle(path)
     print(df.keys())
     print("original_img_shape={}".format(df['original_img_shape']))
@@ -272,11 +272,11 @@ if __name__=="__main__":
     # path='/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy/RibFrac500_img.npy'
     # dpy2niigz(path,dstpath)
 
-    # # read a batch_data pickle
-    # path="../rifrac_test/fold_0/RibFrac500batch.pickle"
-    # dst="./examples"
-    # index,coords=read_batchData_pickle(path,dst)
-    # print(index,coords)
+    # read a batch_data pickle
+    path="./examples/498/RibFrac498batch.pickle"
+    dst="./examples/498"
+    index,coords=read_a_batchData_pickle(path,dst)
+    print(index,coords)
 
     # # get batch result of test
     # originpath="/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/data_npy"
@@ -294,9 +294,10 @@ if __name__=="__main__":
     # file="../rifrac_test/test/fold_0_test_df.pickle"
     # deal_metrics(file)
 
-    path=os.path.join('./examples','499')
-    result=test_result(path)
-    # product nii.gz
-    result.read_batchData_pickle()
-    # return recall and precision
-    result.deal_metrics()
+    # # product the test result
+    # path=os.path.join('./examples','499')
+    # result=test_result(path)
+    # # product nii.gz
+    # result.read_batchData_pickle()
+    # # return recall and precision
+    # result.deal_metrics()
