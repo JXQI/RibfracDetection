@@ -62,7 +62,7 @@ class configs(DefaultConfigs):
         # path to preprocessed data.
         self.pp_name = 'data_npy'
         self.input_df_name = 'info_df.pickle'
-        self.pp_data_path = '/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/{}'.format(self.pp_name)
+        self.pp_data_path = os.path.join(self.root_dir,self.pp_name)
         self.pp_test_data_path = self.pp_data_path #change if test_data in separate folder.
 
         # settings for deployment in cloud.
