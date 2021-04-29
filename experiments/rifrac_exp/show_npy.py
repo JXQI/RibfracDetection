@@ -239,12 +239,61 @@ class test_result:
         df = pd.read_pickle(fold_0_test_df)
         all_p = df[df.class_label == 1].shape[0]
         all_n = df[df.class_label == 0].shape[0]
+        df=df[df.pred_score>0.1]
         det_tp = df[df.det_type == 'det_tp'].shape[0]
         det_fp = df[df.det_type == 'det_fp'].shape[0]
+        print("det_tp={},det_fp={}".format(det_tp,det_fp))
         recall = det_tp / float(all_p)
         precision = det_tp / float(det_tp + det_fp)
         print("all_p={},det_tp={}".format(all_p,det_tp))
         print("Recall={},Precision={}".format(recall, precision))
+
+        # another way
+        fold_0_test_df = join(self.path, "fold_0_test_df.pickle")
+        df = pd.read_pickle(fold_0_test_df)
+        iou_df = df[df.match_iou == cf.ap_match_ious[0]]
+        all_p = len(iou_df[iou_df.class_label == 1])
+        iou_df = iou_df[(iou_df.det_type == 'det_fp') | (iou_df.det_type == 'det_tp')].sort_values('pred_score',
+                                                                                                   ascending=False)
+        iou_df = iou_df[iou_df.pred_score > cf.min_det_thresh]
+        ap=self.compute_roi_ap(iou_df, all_p)
+        print("AP={}".format(ap))
+
+    def compute_roi_ap(self,df, all_p):
+        """
+        adapted from: https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/cocoeval.py
+        :param df: dataframe containing class labels of predictions sorted in descending manner by their prediction score.
+        :param all_p: number of all ground truth objects. (for denominator of recall.)
+        :return:
+        """
+        tp = df.class_label.values
+        fp = (tp == 0) * 1
+        # recall thresholds, where precision will be measured
+        R = np.linspace(.0, 1, 101, endpoint=True)
+        tp_sum = np.cumsum(tp)
+        fp_sum = np.cumsum(fp)
+        nd = len(tp)
+        rc = tp_sum / all_p
+        pr = tp_sum / (fp_sum + tp_sum)
+        # initialize precision array over recall steps.
+        q = np.zeros((len(R),))
+
+        # numpy is slow without cython optimization for accessing elements
+        # use python array gets significant speed improvement
+        pr = pr.tolist()
+        q = q.tolist()
+        for i in range(nd - 1, 0, -1):
+            if pr[i] > pr[i - 1]:
+                pr[i - 1] = pr[i]
+
+        # discretize empiric recall steps with given bins.
+        inds = np.searchsorted(rc, R, side='left')
+        try:
+            for ri, pi in enumerate(inds):
+                q[ri] = pr[pi]
+        except:
+            pass
+        return np.mean(q)
 
 if __name__=="__main__":
     # # show the whole single npy file
@@ -262,8 +311,8 @@ if __name__=="__main__":
     # show_batchdata(path,pid)
 
     # read pickle file
-    path = "./examples/498/raw_pred_boxes_hold_out_list.pickle"
-    load_seg_from_result(path)
+    # path = "./examples/498/raw_pred_boxes_hold_out_list.pickle"
+    # load_seg_from_result(path)
 
     # # dict2DF
     # path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy/meta_info_RibFrac421.pickle"
@@ -301,10 +350,10 @@ if __name__=="__main__":
     # file="../rifrac_test/test/fold_0_test_df.pickle"
     # deal_metrics(file)
 
-    # # product the test result
-    # path=os.path.join('./examples','499')
-    # result=test_result(path)
-    # # product nii.gz
+    # product the test result
+    path=os.path.join('./examples','499')
+    result=test_result(path)
+    # product nii.gz
     # result.read_batchData_pickle()
-    # # return recall and precision
-    # result.deal_metrics()
+    # return recall and precision
+    result.deal_metrics()
