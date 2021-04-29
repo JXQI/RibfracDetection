@@ -41,20 +41,18 @@ class configs(DefaultConfigs):
 
         # one out of [2, 3]. dimension the model operates in.
         self.dim = 3
+        # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_unet', 'ufrcnn'].
+        self.model = 'retina_unet'
+
+        DefaultConfigs.__init__(self, self.model, server_env, self.dim)
 
         # class : if True mul class ,else sinnal class
-        self.mul_class=False
+        self.mul_class = False
         self.n_cv_splits = 1
         # select a maximum number of patient cases to test. number or "all" for all
         self.max_test_patients = "all"
         # perform mirroring at test time. (only XY. Z not done to not blow up predictions times)
         self.test_aug = False
-
-
-        # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_unet', 'ufrcnn'].
-        self.model = 'retina_unet'
-
-        DefaultConfigs.__init__(self, self.model, server_env, self.dim)
 
         # int [0 < dataset_size]. select n patients from dataset for prototyping. If None, all data is used.
         self.select_prototype_subset = None
