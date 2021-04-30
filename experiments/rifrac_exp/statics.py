@@ -12,6 +12,8 @@ from collections import defaultdict
 import pandas as pd
 from matplotlib import pyplot as plt
 import matplotlib
+from multiprocessing import Pool
+import shutil
 
 # path="/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy"
 # rois=[join(path,i) for i in os.listdir(path) if "rois.npy" in i]
@@ -46,8 +48,36 @@ class compute_rois:
         self.feature=[]
         self.rois_features_pickle="rois_feature.pickle"
         self.dstpath="./rois_features"
-        if os.path.isdir(self.dstpath):
+        if not os.path.isdir(self.dstpath):
             os.makedirs(self.dstpath)
+    """
+        function:
+            mul pool to get
+        return:
+            save result to rois_feature.pickle
+    """
+    def get_rois_features(self):
+        pid_list=[join(self.path, i) for i in os.listdir(path) if "rois.npy" in i]
+        pool = Pool(processes=8)
+        p1 = pool.map(self.rois_features, enumerate(pid_list), chunksize=1)
+        pool.close()
+        pool.join()
+
+        # aggrate
+        self.aggregate_meto_info()
+    """
+        function:
+            aggrate pid.pickle to roi_feature.pickle
+    """
+    def aggregate_meto_info(self):
+        file=join(self.dstpath,self.rois_features_pickle)
+        if os.path.isfile(file):
+           os.remove(file)
+        for item in os.listdir(self.dstpath):
+            item=join(self.dstpath,item)
+            self.feature.append(pd.read_pickle(item))
+        with open(file,"wb") as handle:
+            pickle.dump(self.feature,handle)
     """
         function: 
             compute the center 、bbox、centorid
@@ -55,23 +85,20 @@ class compute_rois:
             save result to rois_feature.pickle
     """
     def rois_features(self,roi):
-        rois = [join(self.path, i) for i in os.listdir(path) if "rois.npy" in i]
-        for i in rois:
-            print("deal {}".format(i))
-            item = np.load(i)
-            pre_label = label(item)
-            pred_regions = regionprops(pre_label, item)
-            values = defaultdict(list)
-            for regin in pred_regions:
-                values["bbox"].append(regin.bbox)
-                values["area"].append(regin.area)
-                values["centorid"].append(regin.centroid)
-            values["pid"] = os.path.basename(i).split('_')[0]
-            self.feature.append(values)
-        file_name=os.path.join(self.dstpath,"")
-        with open(self.rois_features_pickle,"wb") as handle:
-            pickle.dump(self.feature,handle)
-        print(self.feature)
+        print("deal {}".format(roi))
+        item = np.load(roi[1])
+        pre_label = label(item)
+        pred_regions = regionprops(pre_label, item)
+        values = defaultdict(list)
+        for regin in pred_regions:
+            values["bbox"].append(regin.bbox)
+            values["area"].append(regin.area)
+            values["centorid"].append(regin.centroid)
+        values["pid"] = os.path.basename(roi[1]).split('_')[0]
+        file_name=os.path.join(self.dstpath,values["pid"]+".pickle")
+        with open(file_name,"wb") as handle:
+            pickle.dump(values,handle)
+        # print(values)
     """
         function: 
             read the rois_feature.pickle
@@ -147,5 +174,5 @@ class compute_rois:
 if __name__=='__main__':
     path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy"
     handle=compute_rois(path)
-    handle.rois_features()
-    handle.distributed_roi()
+    handle.get_rois_features()
+    # handle.distributed_roi()
