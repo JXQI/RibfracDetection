@@ -58,7 +58,7 @@ class compute_rois:
     """
     def get_rois_features(self):
         pid_list=[join(self.path, i) for i in os.listdir(path) if "rois.npy" in i]
-        pool = Pool(processes=8)
+        pool = Pool(processes=5)
         p1 = pool.map(self.rois_features, enumerate(pid_list), chunksize=1)
         pool.close()
         pool.join()
@@ -104,7 +104,7 @@ class compute_rois:
             read the rois_feature.pickle
     """
     def read_rois_pickle(self):
-        self.rois_feature=pd.read_pickle(self.rois_features_pickle)
+        self.rois_feature=pd.read_pickle(join(self.dstpath,self.rois_features_pickle))
         return self.rois_feature
 
     """
@@ -139,9 +139,13 @@ class compute_rois:
         x = [item[0] for item in shape]
         y = [item[1] for item in shape]
         z = [item[2] for item in shape]
-        self.plot_Histogram(x, "x size")
-        self.plot_Histogram(y, "y size")
-        self.plot_Histogram(z, "z size")
+        # ceil to reduce many values
+        x_ceil=(np.ceil(np.array(x)/5)*5).tolist()
+        y_ceil = (np.ceil(np.array(y) / 5)*5).tolist()
+        z_ceil = (np.ceil(np.array(z) / 5)*5).tolist()
+        self.plot_Histogram(x_ceil, "x size")
+        self.plot_Histogram(y_ceil, "y size")
+        self.plot_Histogram(z_ceil, "z size")
         self.plot_scatter(x,y,z)
         plt.show()
     """
@@ -172,7 +176,7 @@ class compute_rois:
 
 
 if __name__=='__main__':
-    path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/data_npy"
+    path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/train_image/data_npy"
     handle=compute_rois(path)
-    handle.get_rois_features()
-    # handle.distributed_roi()
+    # handle.get_rois_features()
+    handle.distributed_roi()
