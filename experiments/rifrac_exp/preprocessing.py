@@ -99,14 +99,12 @@ def aggregate_meta_info(exp_dir):
         with open(f, 'rb') as handle:
             df.loc[len(df)] = pickle.load(handle)
 
-    df.to_pickle(os.path.join(exp_dir, 'info_df.pickle'))
+    df.to_pickle(os.path.join(exp_dir, 'info_df.pickle'),protocol=4)
     print ("aggregated meta info to df with length", len(df))
 
 
 if __name__ == "__main__":
-
     paths = [os.path.join(cf.raw_data_dir, ii) for ii in os.listdir(cf.raw_data_dir) if ii.endswith(".nii.gz")]
-
     if not os.path.exists(cf.pp_dir):
         os.mkdir(cf.pp_dir)
 
