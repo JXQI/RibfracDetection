@@ -91,6 +91,46 @@ def pp_patient(inputs):
         meta_info_dict = {'pid': pid, 'class_target': mal_labels, 'spacing': img.GetSpacing(), 'fg_slices': fg_slices}
         pickle.dump(meta_info_dict, handle)
 
+def pp_patient_int2npz(inputs):
+
+    ix, path = inputs
+    pid = path.split('/')[-1].split('-')[0]
+    img = sitk.ReadImage(path)
+    img_arr = sitk.GetArrayFromImage(img)
+    print('processing {}'.format(pid), img.GetSpacing(), img_arr.shape)
+    img_arr = resample_array(img_arr, img.GetSpacing(), cf.target_spacing)
+    img_arr = np.clip(img_arr, -300, 1700) #L=700,W=2000
+    img_arr = img_arr.astype(np.int16)
+    # img_arr = img_arr.astype(np.float32)
+    # img_arr = (img_arr - np.mean(img_arr)) / np.std(img_arr).astype(np.float16) #Normalize
+
+    df = pd.read_csv(os.path.join(cf.root_dir, cf.csv_file), sep=',')
+    df = df[df.public_id == pid]
+    # read label.nii.gz
+    final_rois = np.zeros_like(img_arr, dtype=np.uint8)
+    label=[]
+    roi = sitk.ReadImage(os.path.join(cf.raw_label_dir, '{}-label.nii.gz'.format(pid)))
+    roi_raters = sitk.GetArrayFromImage(roi).astype(np.uint8)
+    for i in np.unique(roi_raters):
+        if i>0:
+            temp=copy.copy(roi_raters) # notes the copy of list
+            temp[temp!=i]=0
+            roi_arr = resample_array(temp, roi.GetSpacing(), cf.target_spacing)
+            final_rois[roi_arr>0]=i
+            label_code=df[df.label_id==i].label_code.values[0]
+            if label_code==-1:
+                label_code=5
+            label.append(label_code)
+    mal_labels = np.array(label)
+    fg_slices = [ii for ii in np.unique(np.argwhere(final_rois != 0)[:, 0])]    # get slice idx
+    assert len(mal_labels)+1 == len(np.unique(final_rois)), [len(mal_labels), np.unique(final_rois), pid]
+    # np.save(os.path.join(cf.pp_dir, '{}_rois.npy'.format(pid)), final_rois)
+    np.savez_compressed(os.path.join(cf.pp_dir, '{}_img.npz'.format(pid)), img=img_arr,rois=final_rois)
+    print(cf.pp_dir)
+    with open(os.path.join(cf.pp_dir, 'meta_info_{}.pickle'.format(pid)), 'wb') as handle:
+        meta_info_dict = {'pid': pid, 'class_target': mal_labels, 'spacing': img.GetSpacing(), 'fg_slices': fg_slices}
+        pickle.dump(meta_info_dict, handle)
+
 def aggregate_meta_info(exp_dir):
 
     files = [os.path.join(exp_dir, f) for f in os.listdir(exp_dir) if 'meta_info' in f]
@@ -105,11 +145,12 @@ def aggregate_meta_info(exp_dir):
 
 if __name__ == "__main__":
     paths = [os.path.join(cf.raw_data_dir, ii) for ii in os.listdir(cf.raw_data_dir) if ii.endswith(".nii.gz")]
+    print(cf.pp_dir)
     if not os.path.exists(cf.pp_dir):
         os.mkdir(cf.pp_dir)
-
-    pool = Pool(processes=8)
-    p1 = pool.map(pp_patient, enumerate(paths), chunksize=1)
+    paths=paths[0:2]
+    pool = Pool(processes=2)
+    p1 = pool.map(pp_patient_int2npz, enumerate(paths), chunksize=1)
     pool.close()
     pool.join()
     # for i in enumerate(paths):
