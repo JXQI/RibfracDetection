@@ -57,7 +57,6 @@ def _froc_single_thresh(df_list, num_gts, p_thresh, iou_thresh):
     # fp = (total_fp + EPS) / (len(df_list) + EPS)
     fp=(total_fp+EPS)/(img_nums+EPS)
     recall = (total_tp + EPS) / (total_gt + EPS)
-    print(img_nums,fp,recall)
     return fp, recall
 
 
@@ -161,7 +160,7 @@ def froc(df_list, num_gts, iou_thresh=0.1, key_fp=DEFAULT_KEY_FP):
     return fp, recall, key_recall, avg_recall
 
 
-def plot_froc(fp, recall):
+def plot_froc(fp, recall,dst_path):
     """
     Plot the FROC curve.
 
@@ -175,7 +174,7 @@ def plot_froc(fp, recall):
     _, ax = plt.subplots()
     ax.plot(fp, recall)
     ax.set_title("FROC")
-    plt.savefig("./examples/froc.jpg")
+    plt.savefig(os.path.join(dst_path,"froc.jpg"))
 
 
 def evaluate(det_results):
@@ -199,7 +198,6 @@ def evaluate(det_results):
     # calculate the detection FROC
     fp, recall, key_recall, avg_recall = froc(det_results, num_gts)
 
-
     eval_results = {
         "detection": {
             "fp": fp,
@@ -213,31 +211,53 @@ def evaluate(det_results):
 
     return eval_results
 
+"""
+    function:
+        save the froc
+    args: dstpath
+"""
+def froc_evaluate(det_results,dst_path):
+    eval_results = evaluate(det_results)
+    result=pd.DataFrame(np.array(eval_results["detection"]["key_recall"]) \
+                 .reshape(1, -1).astype(np.float32), index=["Recall"],
+                 columns=[f"FP={str(x)}" for x in DEFAULT_KEY_FP])
+    result.to_csv(os.path.join(dst_path,"froc.csv"))
+    plot_froc(eval_results["detection"]["fp"],
+              eval_results["detection"]["recall"],dst_path)
+# add to evaluator
+def get_froc_from_df(inputs):
+    df, det_thresh, per_patient_ap = inputs
+    for match_iou in df.match_iou.unique():
+        iou_df = df[df.match_iou == match_iou]
+        eval_results = evaluate(iou_df)
+    return eval_results
+
 if __name__ == "__main__":
 
     test_df="./examples/400/fold_0_test_df.pickle"
     det_results=pd.read_pickle(test_df)
-    eval_results = evaluate(det_results)
+    froc_evaluate(det_results,"examples")
+    # eval_results = evaluate(det_results)
 
-    # detection metrics
-    print("\nDetection metrics")
-    print("=" * 64)
-    print("Recall at key FP")
-    print(pd.DataFrame(np.array(eval_results["detection"]["key_recall"])\
-        .reshape(1, -1), index=["Recall"],
-        columns=[f"FP={str(x)}" for x in DEFAULT_KEY_FP]))
-    print("Average recall: {:.4f}".format(
-        eval_results["detection"]["average_recall"]))
-    print("Maximum recall: {:.4f}".format(
-        eval_results["detection"]["max_recall"]
-    ))
-    print("Average FP per scan at maximum recall: {:.4f}".format(
-        eval_results["detection"]["average_fp_at_max_recall"]
-    ))
-    # plot/print FROC curve
-    print("FPR, Recall in FROC")
-    for fp, recall in zip(reversed(eval_results["detection"]["fp"]),
-            reversed(eval_results["detection"]["recall"])):
-        print(f"({fp:.8f}, {recall:.8f})")
-    plot_froc(eval_results["detection"]["fp"],
-        eval_results["detection"]["recall"])
+    # # detection metrics
+    # print("\nDetection metrics")
+    # print("=" * 64)
+    # print("Recall at key FP")
+    # print(pd.DataFrame(np.array(eval_results["detection"]["key_recall"])\
+    #     .reshape(1, -1), index=["Recall"],
+    #     columns=[f"FP={str(x)}" for x in DEFAULT_KEY_FP]))
+    # print("Average recall: {:.4f}".format(
+    #     eval_results["detection"]["average_recall"]))
+    # print("Maximum recall: {:.4f}".format(
+    #     eval_results["detection"]["max_recall"]
+    # ))
+    # print("Average FP per scan at maximum recall: {:.4f}".format(
+    #     eval_results["detection"]["average_fp_at_max_recall"]
+    # ))
+    # # plot/print FROC curve
+    # print("FPR, Recall in FROC")
+    # for fp, recall in zip(reversed(eval_results["detection"]["fp"]),
+    #         reversed(eval_results["detection"]["recall"])):
+    #     print(f"({fp:.8f}, {recall:.8f})")
+    # plot_froc(eval_results["detection"]["fp"],
+    #     eval_results["detection"]["recall"],"./examples")
