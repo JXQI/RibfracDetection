@@ -41,10 +41,10 @@ def _froc_single_thresh(df_list, num_gts, p_thresh, iou_thresh):
     """
     EPS = 1e-8
 
-    total_gt = sum(num_gts)
+    total_gt = num_gts
+    img_nums = len(df_list.pid.unique())
     # collect all predictions above the probability threshold
-    df_pos_pred = [df.loc[df["pred_score"] >= p_thresh] for df in df_list
-        if len(df) > 0]
+    df_pos_pred = df_list[df_list.pred_score>p_thresh]
 
     # calculate total true positives
     # total_tp = sum([len(df.loc[df["max_iou"] > iou_thresh, "hit_label"]\
@@ -54,10 +54,10 @@ def _froc_single_thresh(df_list, num_gts, p_thresh, iou_thresh):
     # total_fp = sum([len(df) - len(df.loc[df["max_iou"] > iou_thresh])
     #     for df in df_pos_pred])
     total_fp=len(df_pos_pred[df_pos_pred["class_label"]==0])
-
-    fp = (total_fp + EPS) / (len(df_list) + EPS)
+    # fp = (total_fp + EPS) / (len(df_list) + EPS)
+    fp=(total_fp+EPS)/(img_nums+EPS)
     recall = (total_tp + EPS) / (total_gt + EPS)
-
+    print(img_nums,fp,recall)
     return fp, recall
 
 
@@ -175,7 +175,7 @@ def plot_froc(fp, recall):
     _, ax = plt.subplots()
     ax.plot(fp, recall)
     ax.set_title("FROC")
-    plt.savefig("froc.jpg")
+    plt.savefig("./examples/froc.jpg")
 
 
 def evaluate(det_results):
@@ -215,7 +215,7 @@ def evaluate(det_results):
 
 if __name__ == "__main__":
 
-    test_df=""
+    test_df="./examples/400/fold_0_test_df.pickle"
     det_results=pd.read_pickle(test_df)
     eval_results = evaluate(det_results)
 
