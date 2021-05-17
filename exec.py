@@ -161,7 +161,6 @@ def test(logger):
     test_evaluator.evaluate_predictions(test_results_list)
     test_evaluator.score_test_df()
 
-
 if __name__ == '__main__':
     stime = time.time()
 
@@ -248,6 +247,27 @@ if __name__ == '__main__':
                 logger.set_logfile(fold=fold)
                 test(logger)
 
+    elif args.mode == 'test_all':
+
+        cf = utils.prep_exp(args.exp_source, args.exp_dir, args.server_env, is_training=False, use_stored_settings=True)
+        if args.dev:
+            folds = [0,1]
+            cf.test_n_epochs = 2; cf.max_test_patients = 2
+
+        cf.data_dest = args.data_dest
+        logger = utils.get_logger(cf.exp_dir, cf.server_env)
+        data_loader = utils.import_module('dl', os.path.join(args.exp_source, 'data_loader_test.py'))
+        model = utils.import_module('model', cf.model_path)
+        logger.info("loaded model from {}".format(cf.model_path))
+        if folds is None:
+            folds = range(cf.n_cv_splits)
+
+        with torch.cuda.device(args.cuda_device):
+            for fold in folds:
+                cf.fold_dir = os.path.join(cf.exp_dir, 'fold_{}'.format(fold))
+                cf.fold = fold
+                logger.set_logfile(fold=fold)
+                test(logger)
 
     # load raw predictions saved by predictor during testing, run aggregation algorithms and evaluation.
     elif args.mode == 'analysis':
