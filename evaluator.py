@@ -26,6 +26,7 @@ from sklearn.metrics import roc_curve, precision_recall_curve
 import utils.exp_utils as utils
 import utils.model_utils as mutils
 import plotting
+from experiments.rifrac_exp.froc import get_froc_from_df,DEFAULT_KEY_FP,plot_froc
 
 
 
@@ -281,6 +282,9 @@ class Evaluator():
                     stats_dict['roc'] = np.nan
                     stats_dict['prc'] = np.nan
 
+                    # froc
+                    stats_dict["froc"]=get_froc_from_df([spec_df, self.cf.min_det_thresh, self.cf.per_patient_ap])
+
                     # for the aggregated test set case, additionally get the scores for averaging over fold results.
                     if len(df.fold.unique()) > 1:
                         aps = []
@@ -433,8 +437,24 @@ class Evaluator():
                 handle.write('\nresults for fold {} \n'.format(self.cf.fold))
                 handle.write('\n****************************\n')
                 handle.write('\nfold df shape {}\n  \n'.format(self.test_df.shape))
+                eval_results = None
                 for s in stats:
                     handle.write('AUC {:0.4f}  AP {:0.4f} {} \n'.format(s['auc'], s['ap'], s['name']))
+                    if "rois" in s['name'] and s['froc']:
+                        handle.write("\nthe froc of this detection \n")
+                        eval_results=s['froc']
+                        froc_result = pd.DataFrame(np.array(eval_results["detection"]["key_recall"]) \
+                                              .reshape(1, -1).astype(np.float32), index=["Recall"],
+                                              columns=[f"FP={str(x)}" for x in DEFAULT_KEY_FP])
+                        handle.write(str(froc_result))
+                        handle.write("\nAverage recall: {:.4f}\n".format(eval_results["detection"]["average_recall"]))
+                        handle.write("Maximum recall: {:.4f}\n".format(eval_results["detection"]["max_recall"]))
+                        handle.write("Average FP per scan at maximum recall: {:.4f}\n".format(
+                            eval_results["detection"]["average_fp_at_max_recall"]))
+            # froc
+            if eval_results:
+                froc_result.to_csv(os.path.join(self.cf.test_dir,"froc.csv"))
+                plot_froc(eval_results["detection"]["fp"],eval_results["detection"]["recall"], self.cf.test_dir)
 
             fold_df_paths = [ii for ii in os.listdir(self.cf.test_dir) if ('test_df.pickle' in ii and not 'overall' in ii)]
             if len(fold_df_paths) == self.cf.n_cv_splits:
