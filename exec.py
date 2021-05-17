@@ -161,6 +161,19 @@ def test(logger):
     test_evaluator.evaluate_predictions(test_results_list)
     test_evaluator.score_test_df()
 
+def test_allset(logger):
+    """
+    perform testing for a given fold (or hold out set). save stats in evaluator.
+    """
+    logger.info('starting testing model of fold {} in exp {}'.format(cf.fold, cf.exp_dir))
+    net = model.net(cf, logger).cuda()
+    test_predictor = Predictor(cf, net, logger, mode='test')
+    test_evaluator = Evaluator(cf, logger, mode='test')
+    batch_gen = data_loader.get_train_generators(cf, logger,'val')
+    test_results_list = test_predictor.predict_test_set(batch_gen, return_results=True)
+    test_evaluator.evaluate_predictions(test_results_list)
+    test_evaluator.score_test_df()
+
 if __name__ == '__main__':
     stime = time.time()
 
