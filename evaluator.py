@@ -84,7 +84,7 @@ class Evaluator():
         assert len(batch_inst_boxes) == len(pid_list)
 
         for match_iou in self.cf.ap_match_ious:
-            self.logger.info('evaluating with match_iou: {}'.format(match_iou))
+            # self.logger.info('evaluating with match_iou: {}'.format(match_iou))
             for cl in list(self.cf.class_dict.keys()):
                 for pix, pid in enumerate(pid_list):
 
@@ -212,7 +212,7 @@ class Evaluator():
         :return monitor_metrics: if provided (during training), return monitor_metrics now including results of current epoch.
         """
 
-        self.logger.info('evaluating in mode {}'.format(self.mode))
+        # self.logger.info('evaluating in mode {}'.format(self.mode))
 
         batch_res_dicts = [batch[0] for batch in results_list]  # len: nr of batches in epoch
         if self.mode == 'train' or self.mode == 'val_sampling':
@@ -432,7 +432,10 @@ class Evaluator():
             self.test_df.to_pickle(os.path.join(self.cf.test_dir, '{}_test_df.pickle'.format(self.cf.fold)))
             stats, _ = self.return_metrics()
 
-            with open(os.path.join(self.cf.test_dir, 'results.txt'), 'a') as handle:
+            save_path=os.path.join(self.cf.test_dir,self.mode)
+            if not os.path.exists(save_path):
+                os.mkdir(save_path)
+            with open(os.path.join(save_path, 'results.txt'), 'a') as handle:
                 handle.write('\n****************************\n')
                 handle.write('\nresults for fold {} \n'.format(self.cf.fold))
                 handle.write('\n****************************\n')
@@ -453,8 +456,8 @@ class Evaluator():
                             eval_results["detection"]["average_fp_at_max_recall"]))
             # froc
             if eval_results:
-                froc_result.to_csv(os.path.join(self.cf.test_dir,"froc.csv"))
-                plot_froc(eval_results["detection"]["fp"],eval_results["detection"]["recall"], self.cf.test_dir)
+                froc_result.to_csv(os.path.join(save_path,"froc.csv"))
+                plot_froc(eval_results["detection"]["fp"],eval_results["detection"]["recall"], save_path)
 
             fold_df_paths = [ii for ii in os.listdir(self.cf.test_dir) if ('test_df.pickle' in ii and not 'overall' in ii)]
             if len(fold_df_paths) == self.cf.n_cv_splits:
