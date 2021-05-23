@@ -75,7 +75,7 @@ def query_unusual(data_set):
     pids = p_df.pid.tolist()
 
     # finished result
-    path=os.path.join(cf.fold_dir,'test')
+    path=os.path.join(result_dir,'test')
     results = [i.split('_')[0] for i in os.listdir(path)]
     index = []
     for i, data in enumerate(pids):
