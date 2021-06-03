@@ -235,7 +235,7 @@ def debug_segment():
     print("Drop [{}] labels in all [{}] labels".format(Drop_num[0], Drop_num[1]))
 
 
-def resample_array(src_imgs, src_spacing, target_spacing):
+def resample_array(src_imgs, src_spacing, target_spacing,anti_aliasing=True,mode="edge"):
     src_spacing = np.round(src_spacing, 3)
     target_shape = [int(src_imgs.shape[ix] * src_spacing[::-1][ix] / target_spacing[::-1][ix]) for ix in
                     range(len(src_imgs.shape))]
@@ -246,15 +246,15 @@ def resample_array(src_imgs, src_spacing, target_spacing):
             raise AssertionError("AssertionError:", src_imgs.shape, src_spacing, target_spacing)
 
     img = src_imgs.astype(float)
-    resampled_img = resize(img, target_shape, order=1, clip=True, mode='edge').astype('float32')
-
+    # resampled_img = resize(img, target_shape, order=1, clip=True, mode='edge').astype('float32')
+    resampled_img = resize(img, target_shape, order=1, clip=True, mode=mode,anti_aliasing=anti_aliasing).astype(np.int16)
     return resampled_img
 
 
 # 生成单个病人的数据
 def deal_singal_patient(pid):
     index, pid = pid
-    print("deal process [{}]".format(index))
+
     image_path = join(path, "image", pid + "-image.nii.gz")
     label_path = join(path, "label", pid + "-label.nii.gz")
     # print(image_path, label_path)
@@ -263,42 +263,56 @@ def deal_singal_patient(pid):
     # prodcuct ribfrac CT
     Ribfrac, Mask, Drop_labelNum, roi = segment_singal_CT(image_path, label_path)
     segment_end = time.time()
-    print("segmentation done!spend time=[{}]".format(segment_end - segment_begin))
+    # print("segmentation done!spend time=[{}]".format(segment_end - segment_begin))
 
-    # # new image
-    # Ribfrac_arry = sitk.GetArrayFromImage(Ribfrac)
-    # Ribfrac_arry = resample_array(Ribfrac_arry, Ribfrac.GetSpacing(), target_spacing=target_spacing)
-    # Ribfrac_arry = np.clip(Ribfrac_arry, -300, 1700)  # L=700,W=2000
+    # new image
+    Ribfrac_arry = sitk.GetArrayFromImage(Ribfrac)
+    Ribfrac_arry = resample_array(Ribfrac_arry, Ribfrac.GetSpacing(), target_spacing=target_spacing)
+    Ribfrac_arry = np.clip(Ribfrac_arry, -300, 1700)  # L=700,W=2000
     # Ribfrac_arry = Ribfrac_arry.astype(np.int16)
+    Mask_arry = sitk.GetArrayFromImage(Mask)
+    Mask_arry = resample_array(Mask_arry, Ribfrac.GetSpacing(), target_spacing=target_spacing)
+    df = pd.read_csv(os.path.join(path, csv_file), sep=',')
+    df = df[df.public_id == pid]
+
+    # read label.nii.gz
+    begin=time.time()
+    roi_raters = sitk.GetArrayFromImage(roi).astype(np.uint8)
+    final_rois = np.zeros_like(Ribfrac_arry, dtype=np.uint8)
+    label = []
+    for i in np.unique(roi_raters):
+        if i > 0:
+            temp = copy.copy(roi_raters)  # notes the copy of list
+            temp[temp != i] = 0
+            roi_arr = resample_array(temp, roi.GetSpacing(), target_spacing)
+            final_rois[roi_arr > 0] = i
+            label_code = df[df.label_id == i].label_code.values[0]
+            if label_code == -1:
+                label_code = 5
+            label.append(label_code)
+    # TODO: 上述生成数据的方式太慢，需要改进
+    # label_nums=np.unique(roi_raters)
+    # final_rois = resample_array(roi_raters, roi.GetSpacing(), target_spacing)
+    # final_rois=final_rois.astype(np.uint8)
+    # label=df.label_code.values
+    # label=np.array(label)
+    # label[label==-1]=5
+    # label=label[label>0]
+    # label_nums=label_nums[label_nums>0].tolist()
+    # print(len(label_nums),len(label))
+    # print("spent time={}".format(time.time()-begin))
+
+    mal_labels = np.array(label)
+    fg_slices = [ii for ii in np.unique(np.argwhere(final_rois != 0)[:, 0])]  # get slice idx
     #
-    # df = pd.read_csv(os.path.join(path, csv_file), sep=',')
-    # df = df[df.public_id == pid]
-    #
-    # # read label.nii.gz
-    # final_rois = np.zeros_like(Ribfrac_arry, dtype=np.uint8)
-    # label = []
-    # roi_raters = sitk.GetArrayFromImage(roi).astype(np.uint8)
-    #
-    # for i in np.unique(roi_raters):
-    #     if i > 0:
-    #         temp = copy.copy(roi_raters)  # notes the copy of list
-    #         temp[temp != i] = 0
-    #         roi_arr = resample_array(temp, roi.GetSpacing(), target_spacing)
-    #         final_rois[roi_arr > 0] = i
-    #         label_code = df[df.label_id == i].label_code.values[0]
-    #         if label_code == -1:
-    #             label_code = 5
-    #         label.append(label_code)
-    # mal_labels = np.array(label)
-    # fg_slices = [ii for ii in np.unique(np.argwhere(final_rois != 0)[:, 0])]  # get slice idx
     # assert len(mal_labels) + 1 == len(np.unique(final_rois)), [len(mal_labels), np.unique(final_rois), pid]
-    # # np.save(os.path.join(cf.pp_dir, '{}_rois.npy'.format(pid)), final_rois)
-    # np.savez_compressed(os.path.join(pp_dir, '{}_img.npz'.format(pid)), img=Ribfrac_arry, rois=final_rois)
+    # np.save(os.path.join(cf.pp_dir, '{}_rois.npy'.format(pid)), final_rois)
+    np.savez_compressed(os.path.join(pp_dir, '{}_img.npz'.format(pid)), img=Ribfrac_arry, rois=final_rois,mask=Mask_arry)
     # print("convert to npz done ! spent time [{}]".format(time.time() - segment_end))
-    # with open(os.path.join(pp_dir, 'meta_info_{}.pickle'.format(pid)), 'wb') as handle:
-    #     meta_info_dict = {'pid': pid, 'class_target': mal_labels, 'spacing': Ribfrac.GetSpacing(),
-    #                       'fg_slices': fg_slices}
-    #     pickle.dump(meta_info_dict, handle)
+    with open(os.path.join(pp_dir, 'meta_info_{}.pickle'.format(pid)), 'wb') as handle:
+        meta_info_dict = {'pid': pid, 'class_target': mal_labels, 'spacing': Ribfrac.GetSpacing(),
+                          'fg_slices': fg_slices}
+        pickle.dump(meta_info_dict, handle)
 
     # save Drop num
     Drop_labelNum=list(Drop_labelNum)
@@ -306,6 +320,8 @@ def deal_singal_patient(pid):
     Drop_label=pd.DataFrame(Drop_label)
     Drop_label=Drop_label.T
     Drop_label.to_csv(join(path,pp_dir,pid+'.csv'))
+
+    print("deal process [{}]".format(index))
 
 
 
@@ -328,19 +344,36 @@ def aggregate_meta_info(exp_dir):
     df.to_csv(join(path,pp_dir,'Drop_label.csv'))
 
 
+
+
 target_spacing = (0.7, 0.7, 1.25)
-path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/train_image/"
+path = "/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/ribfrac_train/"
 csv_file = "ribfrac-train-info.csv"
-pp_dir = join(path, "data_segment_npz")
+dir_path="/home/victoria/train_data_jinxiaoqiang/ribfrac_train/"
+pp_dir = join(dir_path, "data_segment_npz")
 if not os.path.exists(pp_dir):
     os.makedirs(pp_dir)
 
-pids = [os.path.basename(item).split("-")[0] for item in os.listdir(join(path, "image")) if
-        item.endswith(".nii.gz")]
-pids=pids[:2]
-print(pids)
+# pids = [os.path.basename(item).split("-")[0] for item in os.listdir(join(path, "image")) if
+#         item.endswith(".nii.gz")]
+pids=['RibFrac22', 'RibFrac237', 'RibFrac279', 'RibFrac181', 'RibFrac385', \
+ 'RibFrac102', 'RibFrac119', 'RibFrac286', 'RibFrac23', 'RibFrac314', \
+ 'RibFrac96', 'RibFrac186', 'RibFrac353', 'RibFrac164', 'RibFrac359', \
+ 'RibFrac406', 'RibFrac125', 'RibFrac367', 'RibFrac232', 'RibFrac134', \
+ 'RibFrac187', 'RibFrac42', 'RibFrac321', 'RibFrac264', 'RibFrac330', \
+ 'RibFrac41', 'RibFrac80', 'RibFrac35', 'RibFrac230', 'RibFrac221', 'RibFrac84',\
+ 'RibFrac320', 'RibFrac207', 'RibFrac352', 'RibFrac30', 'RibFrac349', \
+ 'RibFrac12', 'RibFrac328', 'RibFrac224', 'RibFrac335', 'RibFrac302', \
+ 'RibFrac270', 'RibFrac5', 'RibFrac408', 'RibFrac25', 'RibFrac197', \
+ 'RibFrac52', 'RibFrac238', 'RibFrac249', 'RibFrac31', 'RibFrac316', \
+ 'RibFrac364', 'RibFrac300', 'RibFrac205', 'RibFrac135', 'RibFrac203',\
+ 'RibFrac123', 'RibFrac145', 'RibFrac258', 'RibFrac304', 'RibFrac294', \
+ 'RibFrac412', 'RibFrac227', 'RibFrac313', 'RibFrac272', 'RibFrac95', \
+ 'RibFrac117']
+# pids=pids[:1]
+print(len(pids))
 if __name__ == '__main__':
-    pool = Pool(processes=1)
+    pool = Pool(processes=3)
     p1 = pool.map(deal_singal_patient, enumerate(pids), chunksize=1)
     pool.close()
     pool.join()
