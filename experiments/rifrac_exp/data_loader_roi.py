@@ -5,6 +5,7 @@ warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 from os.path import join
 import os
 import pandas as pd
+import pickle
 from skimage.measure import regionprops
 import SimpleITK as sitk
 import utils.dataloader_utils as dutils
@@ -20,20 +21,44 @@ from batchgenerators.transforms.crop_and_pad_transforms import CenterCropTransfo
 from batchgenerators.transforms.utility_transforms import ConvertSegToBoundingBoxCoordinates
 
 class load_data(Dataset):
-    def __init__(self,path,cf,is_training=True):
+    def __init__(self,path,cf,is_training=False):
         self.path=path
-        self.image=[join(self.path,i) for i in os.listdir(self.path) if i.endswith(".npz")]
-        self.image=self.image[:100]
-        self.pid=[i.split('_')[0] for i in os.listdir(self.path) if i.endswith(".npz")]
+        self.all_image=[join(self.path,i) for i in os.listdir(self.path) if i.endswith(".npz")]
+        # self.all_image=self.all_image[:100]
+        self.all_pid=[i.split('_')[0] for i in os.listdir(self.path) if i.endswith(".npz")]
 
         p_df = pd.read_pickle(os.path.join(cf.pp_data_path, cf.input_df_name))
         p_df_target=p_df['class_target'].tolist()
-        self.class_targets=[]
+        self.all_class_targets=[]
         p_pid=p_df.pid.tolist()
-        for pid in self.pid:
+        for pid in self.all_pid:
             target_index=p_pid.index(pid)
             target=p_df_target[target_index]
-            self.class_targets.append([0 for ii in target if ii>=0])
+            self.all_class_targets.append([0 for ii in target if ii>=0])
+
+        splits_file = os.path.join(cf.exp_dir, 'fold_ids.pickle')
+        # splits_file="./fold_ids.pickle"
+        cf.fold=0
+        with open(splits_file, 'rb') as handle:
+            fg = pickle.load(handle)
+        train_ix, val_ix, test_ix, _ = fg[cf.fold]
+        # print(len(train_ix))
+        train_ix=np.concatenate([train_ix,test_ix],axis=0)
+        # print(len(train_ix))
+
+        train_pids = [p_pid[ix] for ix in train_ix]
+        val_pids = [p_pid[ix] for ix in val_ix]
+        # print(len(train_pids),len(val_pids))
+        self.image,self.pid,self.class_targets=[],[],[]
+
+        target_pid=train_pids if is_training else val_pids
+
+        for i,pid in enumerate(self.all_pid):
+            if pid in target_pid:
+                self.image.append(self.all_image[i])
+                self.pid.append(self.all_pid[i])
+                self.class_targets.append(self.all_class_targets[i])
+        print(self.image)
 
         my_transforms = []
         if is_training:
@@ -231,22 +256,22 @@ if __name__=='__main__':
     # # path = "/Users/jinxiaoqiang/jinxiaoqiang/RifracDetection/deal_data/data"
     # #
 
-    # # 加载数据
-    # path='./patch_image'
-    # cf_file = utils.import_module("cf", "configs.py")
-    # cf = cf_file.configs()
-    # cf.pp_data_path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/train_image/data_npz"
-    # p_df = pd.read_pickle(os.path.join(cf.pp_data_path, cf.input_df_name))
-    # data_set=load_data(path,cf)
-    # data_loader=DataLoader(dataset=data_set,num_workers=2,batch_size=16,collate_fn=collate_func)
-    # for i,item in enumerate(data_loader):
-    #     print(item['bb_target'].shape)
-
-    path = "./data/data_segment_npz"
-    save_dir="./data/patch_image"
+    # 加载数据
+    path='./patch_image'
     cf_file = utils.import_module("cf", "configs.py")
     cf = cf_file.configs()
-    CTData = CtTrainDataset(path,save_dir=save_dir,cf=cf)
-    CTData._save_patch()
+    cf.pp_data_path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/train_image/data_npz"
+    p_df = pd.read_pickle(os.path.join(cf.pp_data_path, cf.input_df_name))
+    data_set=load_data(path,cf)
+    data_loader=DataLoader(dataset=data_set,num_workers=2,batch_size=16,collate_fn=collate_func)
+    for i,item in enumerate(data_loader):
+        print(item['bb_target'].shape)
+
+    # path = "./data/data_segment_npz"
+    # save_dir="./data/patch_image"
+    # cf_file = utils.import_module("cf", "configs.py")
+    # cf = cf_file.configs()
+    # CTData = CtTrainDataset(path,save_dir=save_dir,cf=cf)
+    # CTData._save_patch()
     # data="./patch_image/RibFrac96_2.npz"
     # npz2nii(data)
