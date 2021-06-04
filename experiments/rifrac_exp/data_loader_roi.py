@@ -23,7 +23,7 @@ class load_data(Dataset):
     def __init__(self,path,cf,is_training=True):
         self.path=path
         self.image=[join(self.path,i) for i in os.listdir(self.path) if i.endswith(".npz")]
-        # print(self.image)
+        self.image=self.image[:100]
         self.pid=[i.split('_')[0] for i in os.listdir(self.path) if i.endswith(".npz")]
 
         p_df = pd.read_pickle(os.path.join(cf.pp_data_path, cf.input_df_name))
@@ -99,8 +99,11 @@ def collate_func(batch_result):
     # print(roi_masks.shape)
     return {"data":data,'seg':seg,'pid':pid,'class_target':class_target,'bb_target':bb_target,'roi_masks':roi_masks}
 
-
-
+def roi_data_loader(cf,num_works=1,batch_size=16):
+    path="/home/victoria/train_data_jinxiaoqiang/medicaldetectiontoolkit/experiments/rifrac_RetinaNet_segment_exp/data/patch_image"
+    data_set = load_data(path, cf)
+    data_loader = DataLoader(dataset=data_set, num_workers=8, batch_size=16, collate_fn=collate_func)
+    return data_loader
 '''
 function:
    get 3Dpatch and label
@@ -113,7 +116,8 @@ class CtTrainDataset:
         self.crop_margin=np.array(self.cf.patch_size)/8. #min distance of ROI center to edge of cropped_patch.
         self.public_id=sorted([x.split("_")[0]
                                for x in os.listdir(path) if x.endswith(".npz")])
-        # print(self.public_id)
+        # self.public_id=self.public_id[:11]
+        print(self.public_id)
         self.save_dir=save_dir
         if not os.path.isdir(save_dir):
             os.makedirs(self.save_dir)
@@ -183,7 +187,7 @@ class CtTrainDataset:
             image_arr = dutils.pad_nd_image(image_arr, new_shape, mode='constant')
             label_arr = dutils.pad_nd_image(label_arr, new_shape, mode='constant')
 
-        print(image_arr.shape,label_arr.shape)
+        # print(image_arr.shape,label_arr.shape)
         # calcute the rois's centroids
         roi_centroids=self._get_pos_centroids(label_arr)
         # # crop rois
@@ -202,6 +206,7 @@ class CtTrainDataset:
     # 保存成npy数据，方便读取
     def _save_patch(self):
         for idx in range(len(self.public_id)):
+            print("idx={}/{}".format(idx,len(self.public_id)),flush=True)
             image,label=self._get_patch(idx)
             basename=self.public_id[idx]
             for i,data in enumerate(image):
@@ -237,8 +242,8 @@ if __name__=='__main__':
     # for i,item in enumerate(data_loader):
     #     print(item['bb_target'].shape)
 
-    path = "/Users/jinxiaoqiang/jinxiaoqiang/DATA/Bone/ribfrac/train_image/data_segment_npz"
-    save_dir="patch_image"
+    path = "./data/data_segment_npz"
+    save_dir="./data/patch_image"
     cf_file = utils.import_module("cf", "configs.py")
     cf = cf_file.configs()
     CTData = CtTrainDataset(path,save_dir=save_dir,cf=cf)
