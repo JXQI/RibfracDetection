@@ -31,6 +31,7 @@ import torch.utils
 
 sys.path.append('..')
 from custom_extensions.nms import nms
+from losses import focal_loss
 
 
 ############################################################
@@ -426,7 +427,8 @@ class net(nn.Module):
             anchor_target_deltas = torch.from_numpy(anchor_target_deltas).float().cuda()
 
             # compute losses.
-            class_loss, neg_anchor_ix = compute_class_loss(anchor_class_match, class_logits[b])
+            # class_loss, neg_anchor_ix = compute_class_loss(anchor_class_match, class_logits[b])
+            class_loss,neg_anchors_ix=focal_loss.sigmoid_focal_loss(anchor_class_match,class_logits[b])
             bbox_loss = compute_bbox_loss(anchor_target_deltas, pred_deltas[b], anchor_class_match)
 
             # add negative anchors used for loss to results_dict for monitoring.
