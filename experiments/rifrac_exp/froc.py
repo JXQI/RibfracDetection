@@ -171,11 +171,24 @@ def plot_froc(fp, recall,dst_path):
     recall : list of float
         List of recall at different confidence thresholds.
     """
-    _, ax = plt.subplots()
-    ax.plot(fp, recall)
-    ax.set_title("FROC")
-    plt.savefig(os.path.join(dst_path,"froc.jpg"))
+    # _, ax = plt.subplots()
+    # plt.grid()
+    # x=range(len(fp))
+    # ax.plot(x, recall)
+    # plt.xticks(x,fp)
+    # ax.set_title("FROC")
+    # plt.savefig(os.path.join(dst_path,"froc.jpg"))
 
+    plt.grid()
+    x=range(len(fp))
+    plt.xlim((x[0],x[-1]))
+    plt.ylim((0,1))
+    plt.plot(x, recall,marker='d')
+    # 设置坐标值刻度
+    plt.yticks(np.arange(0, 1, 0.1))
+    plt.xticks(x,fp)
+    plt.title("FROC")
+    plt.savefig(os.path.join(dst_path,"froc.jpg"))
 
 def evaluate(det_results):
     """
@@ -222,8 +235,10 @@ def froc_evaluate(det_results,dst_path):
                  .reshape(1, -1).astype(np.float32), index=["Recall"],
                  columns=[f"FP={str(x)}" for x in DEFAULT_KEY_FP])
     result.to_csv(os.path.join(dst_path,"froc.csv"))
-    plot_froc(eval_results["detection"]["fp"],
-              eval_results["detection"]["recall"],dst_path)
+    # plot_froc(eval_results["detection"]["fp"],
+    #           eval_results["detection"]["recall"],dst_path)
+    plot_froc(DEFAULT_KEY_FP, eval_results["detection"]["key_recall"],
+              dst_path)
 # add to evaluator
 def get_froc_from_df(inputs):
     df, det_thresh, per_patient_ap = inputs
@@ -234,9 +249,11 @@ def get_froc_from_df(inputs):
 
 if __name__ == "__main__":
 
-    test_df="./examples/400/fold_0_test_df.pickle"
-    det_results=pd.read_pickle(test_df)
-    froc_evaluate(det_results,"examples")
+    # test_df="./examples/400/fold_0_test_df.pickle"
+    test_df="/media/victoria/9c3e912e-22e1-476a-ad55-181dbde9d785/jinxiaoqiang/rifrac/experiment/RetinaNet_3D_segment_seg/val/wbc/all_final_test_df.csv"
+    # det_results=pd.read_pickle(test_df)
+    det_results = pd.read_csv(test_df)
+    froc_evaluate(det_results,".")
     # eval_results = evaluate(det_results)
 
     # # detection metrics
