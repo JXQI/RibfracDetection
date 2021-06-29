@@ -428,7 +428,7 @@ class net(nn.Module):
 
             # compute losses.
             # class_loss, neg_anchor_ix = compute_class_loss(anchor_class_match, class_logits[b])
-            class_loss,neg_anchors_ix=focal_loss.sigmoid_focal_loss(anchor_class_match,class_logits[b])
+            class_loss,neg_anchor_ix=focal_loss.sigmoid_focal_loss(class_logits[b],anchor_class_match)
             bbox_loss = compute_bbox_loss(anchor_target_deltas, pred_deltas[b], anchor_class_match)
 
             # add negative anchors used for loss to results_dict for monitoring.
