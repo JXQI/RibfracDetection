@@ -325,7 +325,6 @@ def get_results(cf, img_shape, detections, seg_logits, box_results_list=None):
     else:
         # output label maps for retina_unet.
         results_dict['seg_preds'] = F.softmax(seg_logits, 1).argmax(1).cpu().data.numpy()[:, np.newaxis].astype('uint8')
-
     return results_dict
 
 
@@ -401,7 +400,7 @@ class net(nn.Module):
 
         # list of output boxes for monitoring/plotting. each element is a list of boxes per batch element.
         box_results_list = [[] for _ in range(img.shape[0])]
-        detections, class_logits, pred_deltas, seg_features = self.forward(img)
+        detections, class_logits, pred_deltas, seg_logits = self.forward(img)
 
         # loop over batch
         for b in range(img.shape[0]):
@@ -440,23 +439,31 @@ class net(nn.Module):
             for n in neg_anchors:
                 box_results_list[b].append({'box_coords': n, 'box_type': 'neg_anchor'})
 
-            batch_class_loss += class_loss / img.shape[0]
-            batch_bbox_loss += bbox_loss / img.shape[0]
+            # batch_class_loss += class_loss / img.shape[0]
+            # batch_bbox_loss += bbox_loss / img.shape[0]
+            batch_class_loss += class_loss
+            batch_bbox_loss += bbox_loss
 
         # 此处没有seg_logits
-        results_dict = get_results(self.cf, img.shape, detections, None, box_results_list)
+        results_dict = get_results(self.cf, img.shape, detections, seg_logits, box_results_list)
         # 对result_dict中的box进行分割
-        seg_preds,seg_loss_dice,seg_loss_ce=self.seg_box(results_dict,seg_features,var_seg_ohe,var_seg)
-        # seg_loss_dice = 1 - mutils.batch_dice(F.softmax(seg_logits, dim=1),var_seg_ohe)
-        # seg_loss_ce = F.cross_entropy(seg_logits, var_seg[:, 0])
-        loss = batch_class_loss + batch_bbox_loss + (seg_loss_dice + seg_loss_ce) / 2
-        results_dict['seg_preds']=seg_preds
+        seg_preds,seg_loss_dice,seg_loss_ce=self.seg_box(results_dict,seg_logits,var_seg_ohe,var_seg)
+        # loss = batch_class_loss + batch_bbox_loss + (seg_loss_dice + seg_loss_ce) / 2
+        batch_class_loss=batch_class_loss/img.shape[0]
+        batch_bbox_loss=batch_bbox_loss/img.shape[0]
+        seg_loss_ce=seg_loss_ce/img.shape[0]
+        loss = batch_class_loss + batch_bbox_loss + seg_loss_ce
+        # results_dict['seg_preds']=seg_preds
         results_dict['torch_loss'] = loss
         results_dict['monitor_values'] = {'loss': loss.item(), 'class_loss': batch_class_loss.item()}
+        # results_dict['logger_string'] = \
+        #     "loss: {0:.2f}, class: {1:.2f}, bbox: {2:.2f}, seg dice: {3:.3f}, seg ce: {4:.3f}, mean pix. pr.: {5:.5f}"\
+        #     .format(loss.item(), batch_class_loss.item(), batch_bbox_loss.item(), seg_loss_dice.item(),
+        #             seg_loss_ce.item(), np.mean(results_dict['seg_preds']))
         results_dict['logger_string'] = \
-            "loss: {0:.2f}, class: {1:.2f}, bbox: {2:.2f}, seg dice: {3:.3f}, seg ce: {4:.3f}, mean pix. pr.: {5:.5f}"\
-            .format(loss.item(), batch_class_loss.item(), batch_bbox_loss.item(), seg_loss_dice.item(),
-                    seg_loss_ce.item(), np.mean(results_dict['seg_preds']))
+            "loss: {0:.2f}, class: {1:.2f}, bbox: {2:.2f}, seg dice: {3:.3f}, seg ce: {4:.3f}" \
+                .format(loss.item(), batch_class_loss.item(), batch_bbox_loss.item(), seg_loss_dice,
+                        seg_loss_ce)
 
         return results_dict
 
@@ -476,6 +483,10 @@ class net(nn.Module):
         img = torch.from_numpy(img).float().cuda()
         detections, _, _, seg_logits = self.forward(img)
         results_dict = get_results(self.cf, img.shape, detections, seg_logits)
+        # 对result_dict中的box进行分割
+        # seg_preds= self.crop_seg_box(results_dict, seg_logits)
+        # results_dict['seg_preds'] = seg_preds
+        # print(np.unique(seg_preds))
         return results_dict
 
 
@@ -491,7 +502,7 @@ class net(nn.Module):
         """
         # Feature extraction
         fpn_outs = self.Fpn(img)
-        # seg_logits = self.final_conv(fpn_outs[0])
+        seg_logits = self.final_conv(fpn_outs[0])
         selected_fmaps = [fpn_outs[i + 1] for i in self.cf.pyramid_levels]
 
         # Loop through pyramid layers
@@ -515,9 +526,33 @@ class net(nn.Module):
         flat_bb_outputs = bb_outputs.view(-1, bb_outputs.shape[-1])
         detections = refine_detections(self.anchors, flat_class_softmax, flat_bb_outputs, batch_ixs, self.cf)
 
-        return detections, class_logits, bb_outputs, fpn_outs[0]
+        return detections, class_logits, bb_outputs, seg_logits
 
-    def seg_box(self,results_dict, seg_features, var_seg_ohe, var_seg):
+    def crop_seg_box(self,results_dict, seg_probs):
+        # 需要分割的box
+        seg_results = []
+        for batch in results_dict['boxes']:
+            # gd=[box['box_coords'] for box in batch if box['box_type']=='gt']
+            # for box in gd:
+            #     y1, x1, y2, x2, z1, z2 = box
+            #     print(box)
+            #     print(y2-y1,x2-x1,z2-z1)
+            box_results_list = [box['box_coords'] for box in batch if box['box_type']=='det' or box['box_type']=='gt']
+            #climp
+            if len(box_results_list):
+                window=np.array([0, 0, 128, 128, 0, 64])
+                box_results_list=clip_to_window(window, np.array(box_results_list)) #TODO:这里有问题
+            for box in box_results_list:
+                y1, x1, y2, x2, z1, z2 = box
+                box_probs = seg_probs[:,:, y1:y2, x1:x2, z1:z2]  # 需要确定feature的维度
+                # output label maps for retina_unet.
+                seg_preds = F.softmax(box_probs, 1).argmax(1).cpu().data.numpy()[:, np.newaxis].astype(
+                    'uint8')
+                seg_results.append(seg_preds)
+        print("restine_seg:{}".format(np.unique(seg_results)))
+        return seg_results
+
+    def seg_box(self,results_dict, seg_probs, var_seg_ohe, var_seg):
         """
         function: 对box进行segmentation
         args:
@@ -530,34 +565,82 @@ class net(nn.Module):
             seg_sum_ce: ce loss的总和
         """
         # 需要分割的box
-        box_results_list = [box['box_coords'] for box in results_dict['boxes']]
-        # 保留分割的结果
+        probs=[]
         seg_results=[]
-        # 保留loss
-        seg_sum_dice,seg_sum_ce=0,0
-        for box in box_results_list:
-            y1, x1, y2, x2, z1, z2 = box
-            box_feature = seg_features[:, x1:x2, y1:y2, z1:z2]  # 需要确定feature的维度
-            box_mask_ohe = var_seg_ohe[:, x1:x2, y1:y2, z1:z2]
-            box_mask = var_seg[:, x1:x2, y1:y2, z1:z2]
+        mask_ohe=[]
+        mask=[]
+        for batch in results_dict['boxes']:
+            # gd=[box['box_coords'] for box in batch if box['box_type']=='gt']
+            # for box in gd:
+            #     y1, x1, y2, x2, z1, z2 = box
+            #     print(box)
+            #     print(y2-y1,x2-x1,z2-z1)
+            box_results_list = [box['box_coords'] for box in batch if box['box_type']=='det' or box['box_type']=='gt']
+            #climp
+            if len(box_results_list):
+                window=np.array([0, 0, 128, 128, 0, 64])
+                box_results_list=clip_to_window(window, np.array(box_results_list)) #TODO:这里有问题
+            for box in box_results_list:
+                y1, x1, y2, x2, z1, z2 = box
+                box_probs = seg_probs[:,:, y1:y2, x1:x2, z1:z2]  # 需要确定feature的维度
+                box_mask_ohe = var_seg_ohe[:,:, y1:y2,x1:x2, z1:z2]
+                box_mask = var_seg[:,:, y1:y2, x1:x2, z1:z2]
 
-            # 前向传播
-            seg_logits = self.final_conv(box_feature)
+                probs.append(box_probs)
+                mask_ohe.append(box_mask_ohe)
+                mask.append(box_mask)
 
-            # 计算loss
-            seg_loss_dice = 1 - mutils.batch_dice(F.softmax(seg_logits, dim=1), box_mask_ohe)
-            seg_loss_ce  = F.cross_entropy(seg_logits, box_mask[:, 0])
-
-            # output label maps for box
-            if seg_logits is None:
-                # output dummy segmentation for retina_net.
-                seg_preds = np.zeros(box.shape)[:, 0][:, np.newaxis]
-            else:
                 # output label maps for retina_unet.
-                seg_preds= F.softmax(seg_logits, 1).argmax(1).cpu().data.numpy()[:, np.newaxis].astype(
-                    'uint8')
-            seg_results.append(seg_preds)
-            seg_sum_ce+=seg_loss_ce
-            seg_sum_dice+=seg_loss_dice
+                seg_preds = F.softmax(box_probs, 1).argmax(1).cpu().data.numpy()[:, np.newaxis].astype(
+                        'uint8')
+                seg_results.append(seg_preds)
 
-        return seg_results,seg_sum_dice,seg_sum_ce
+        # 计算loss
+
+        num_seg_contribute = 0
+        seg_sum_ce, seg_sum_dice = 0, 0
+        for i in range(len(probs)):
+            prob=probs[i]
+            target=mask[i]
+            target_ohe=mask_ohe[i]
+            # only those instances that their gt-mask have something woule contribute
+            if(target==1).sum():
+                seg_loss_dice = 1 - mutils.batch_dice(F.softmax(prob, dim=1), target_ohe)
+                seg_loss_ce = F.cross_entropy(prob, target[:, 0])
+                num_seg_contribute+=1
+                seg_sum_ce += seg_loss_ce
+                seg_sum_dice += seg_loss_dice
+
+            #     # output label maps for box
+            # if prob is None:
+            #     # output dummy segmentation for retina_net.
+            #     seg_preds = np.zeros(box.shape)[:, 0][:, np.newaxis]
+            # else:
+            #     # output label maps for retina_unet.
+            #     seg_preds = F.softmax(prob, 1).argmax(1).cpu().data.numpy()[:, np.newaxis].astype(
+            #         'uint8')
+            # # seg_results.append(seg_preds)
+        # seg_sum_dice, seg_sum_ce = seg_sum_dice / len(seg_results), seg_sum_ce / len(seg_results)
+
+        return seg_results, seg_sum_dice, seg_sum_ce
+
+
+
+
+
+
+def clip_to_window(window, boxes):
+    """
+        window: (y1, x1, y2, x2) / 3D: (z1, z2). The window in the image we want to clip to.
+        boxes: [N, (y1, x1, y2, x2)]  / 3D: (z1, z2)
+    """
+    boxes[:, 0] = boxes[:, 0].clip(float(window[0]), float(window[2]))
+    boxes[:, 1] = boxes[:, 1].clip(float(window[1]), float(window[3]))
+    boxes[:, 2] = boxes[:, 2].clip(float(window[0]), float(window[2]))
+    boxes[:, 3] = boxes[:, 3].clip(float(window[1]), float(window[3]))
+
+    if boxes.shape[1] > 5:
+        boxes[:, 4] = boxes[:, 4].clip(float(window[4]), float(window[5]))
+        boxes[:, 5] = boxes[:, 5].clip(float(window[4]), float(window[5]))
+
+    return boxes
