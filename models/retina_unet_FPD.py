@@ -44,11 +44,10 @@ class Fp_reduce(nn.Module):
         """
     def __init__(self, cf, conv):
         super(Fp_reduce, self).__init__()
-
         self.dim = conv.dim
         self.in_channels = cf.end_filts
         self.pool_size = cf.pool_size
-        self.pyramid_levels = ["P1"]
+        self.pyramid_levels = [0]
         # instance_norm does not work with spatial dims (1, 1, (1))
         norm = cf.norm if cf.norm != 'instance_norm' else None
 
@@ -179,8 +178,6 @@ def refine_proposals(rpn_pred_probs, rpn_pred_deltas, proposal_count, batch_anch
     norm = torch.from_numpy(cf.scale).float().cuda()
     anchors = batch_anchors.clone()
 
-
-
     batch_scores = rpn_pred_probs[:, :, 1]
     # norm deltas
     batch_deltas = rpn_pred_deltas * std_dev
@@ -238,6 +235,77 @@ def refine_proposals(rpn_pred_probs, rpn_pred_deltas, proposal_count, batch_anch
 
     return batch_normalized_props, batch_out_proposals
 
+# def fp_roi_align(feature_maps, rois, pool_size, pyramid_levels, dim):
+#     """
+#     Implements ROI Pooling on multiple levels of the feature pyramid.
+#     :param feature_maps: list of feature maps, each of shape (b, c, y, x , (z))
+#     :param rois: proposals (normalized coords.) as returned by RPN. contain info about original batch element allocation.
+#     (n_proposals, (y1, x1, y2, x2, (z1), (z2), batch_ixs)
+#     :param pool_size: list of poolsizes in dims: [x, y, (z)]
+#     :param pyramid_levels: list. [0, 1, 2, ...]
+#     :return: pooled: pooled feature map rois (n_proposals, c, poolsize_y, poolsize_x, (poolsize_z))
+#
+#     Output:
+#     Pooled regions in the shape: [num_boxes, height, width, channels].
+#     The width and height are those specific in the pool_shape in the layer
+#     constructor.
+#     """
+#     boxes = rois[:, :dim*2]
+#     batch_ixs = rois[:, dim*2]
+#
+#     # Assign each ROI to a level in the pyramid based on the ROI area.
+#     if dim == 2:
+#         y1, x1, y2, x2 = boxes.chunk(4, dim=1)
+#     else:
+#         y1, x1, y2, x2, z1, z2 = boxes.chunk(6, dim=1)
+#
+#     h = y2 - y1
+#     w = x2 - x1
+#
+#     # Equation 1 in https://arxiv.org/abs/1612.03144. Account for
+#     # the fact that our coordinates are normalized here.
+#     # divide sqrt(h*w) by 1 instead image_area.
+#     # roi_level = (4 + torch.log2(torch.sqrt(h*w))).round().int().clamp(pyramid_levels[0], pyramid_levels[-1])
+#     # if Pyramid contains additional level P6, adapt the roi_level assignment accordingly.
+#     # if len(pyramid_levels) == 5:
+#     #     roi_level[h*w > 0.65] = 5
+#
+#     # Loop through levels and apply ROI pooling to each.
+#     pooled = []
+#     # box_to_level = []
+#     fmap_shapes = [f.shape for f in feature_maps]
+#     for level_ix, level in enumerate(pyramid_levels):
+#         boxes=boxes.detach()
+#         if len(pool_size) == 2:
+#             # remap to feature map coordinate system
+#             y_exp, x_exp = fmap_shapes[level_ix][2:]  # exp = expansion
+#             boxes.mul_(torch.tensor([y_exp, x_exp, y_exp, x_exp], dtype=torch.float32).cuda())
+#             pooled_features = roi_align.roi_align_2d(feature_maps[level_ix],
+#                                                      torch.cat((batch_ixs.int().unsqueeze(1).float(), boxes), dim=1),
+#                                                      pool_size)
+#         else:
+#             y_exp, x_exp, z_exp = fmap_shapes[level_ix][2:]
+#             boxes.mul_(torch.tensor([y_exp, x_exp, y_exp, x_exp, z_exp, z_exp], dtype=torch.float32).cuda())
+#             # boxes_new=torch.mul(boxes,torch.tensor([y_exp, x_exp, y_exp, x_exp, z_exp, z_exp], dtype=torch.float32).cuda())
+#             pooled_features = roi_align.roi_align_3d(feature_maps[level_ix],
+#                                                      torch.cat((batch_ixs.int().unsqueeze(1).float(), boxes), dim=1),
+#                                                      pool_size)
+#         pooled.append(pooled_features)
+#
+#
+#     # Pack pooled features into one tensor
+#     pooled = torch.cat(pooled, dim=0)
+#
+#     # Pack box_to_level mapping into one array and add another
+#     # column representing the order of pooled boxes
+#     # box_to_level = torch.cat(box_to_level, dim=0)
+#
+#     # Rearrange pooled features to match the order of the original boxes
+#     # _, box_to_level = torch.sort(box_to_level)
+#     # pooled = pooled[box_to_level, :, :]
+#
+#     return pooled
+#
 def fp_roi_align(feature_maps, rois, pool_size, pyramid_levels, dim):
     """
     Implements ROI Pooling on multiple levels of the feature pyramid.
@@ -278,18 +346,31 @@ def fp_roi_align(feature_maps, rois, pool_size, pyramid_levels, dim):
     box_to_level = []
     fmap_shapes = [f.shape for f in feature_maps]
     for level_ix, level in enumerate(pyramid_levels):
+        ix = roi_level == level
+        if not ix.any():
+            continue
+        ix = torch.nonzero(ix)[:, 0]
+        level_boxes = boxes[ix, :]
+        # re-assign rois to feature map of original batch element.
+        ind = batch_ixs[ix].int()
+
+        # Keep track of which box is mapped to which level
+        box_to_level.append(ix)
+
+        # Stop gradient propogation to ROI proposals
+        level_boxes = level_boxes.detach()
         if len(pool_size) == 2:
             # remap to feature map coordinate system
             y_exp, x_exp = fmap_shapes[level_ix][2:]  # exp = expansion
-            boxes.mul_(torch.tensor([y_exp, x_exp, y_exp, x_exp], dtype=torch.float32).cuda())
+            level_boxes.mul_(torch.tensor([y_exp, x_exp, y_exp, x_exp], dtype=torch.float32).cuda())
             pooled_features = roi_align.roi_align_2d(feature_maps[level_ix],
-                                                     torch.cat((batch_ixs.int().unsqueeze(1).float(), boxes), dim=1),
+                                                     torch.cat((ind.unsqueeze(1).float(), level_boxes), dim=1),
                                                      pool_size)
         else:
             y_exp, x_exp, z_exp = fmap_shapes[level_ix][2:]
-            boxes.mul_(torch.tensor([y_exp, x_exp, y_exp, x_exp, z_exp, z_exp], dtype=torch.float32).cuda())
+            level_boxes.mul_(torch.tensor([y_exp, x_exp, y_exp, x_exp, z_exp, z_exp], dtype=torch.float32).cuda())
             pooled_features = roi_align.roi_align_3d(feature_maps[level_ix],
-                                                     torch.cat((batch_ixs.int().unsqueeze(1).float(), boxes), dim=1),
+                                                     torch.cat((ind.unsqueeze(1).float(), level_boxes), dim=1),
                                                      pool_size)
         pooled.append(pooled_features)
 
@@ -306,7 +387,6 @@ def fp_roi_align(feature_maps, rois, pool_size, pyramid_levels, dim):
     pooled = pooled[box_to_level, :, :]
 
     return pooled
-
 
 
 def pyramid_roi_align(feature_maps, rois, pool_size, pyramid_levels, dim):
@@ -494,8 +574,9 @@ def detection_target_layer(batch_proposals, batch_mrcnn_class_scores, batch_gt_c
                 masks = roi_align.roi_align_2d(roi_masks, torch.cat((box_ids, boxes), dim=1), cf.mask_shape)
             else:
                 y_exp, x_exp, z_exp = roi_masks.shape[2:]  # exp = expansion
-                boxes.mul_(torch.tensor([y_exp, x_exp, y_exp, x_exp, z_exp, z_exp], dtype=torch.float32).cuda())
-                masks = roi_align.roi_align_3d(roi_masks, torch.cat((box_ids, boxes), dim=1), cf.mask_shape)
+                # boxes.mul_(torch.tensor([y_exp, x_exp, y_exp, x_exp, z_exp, z_exp], dtype=torch.float32).cuda())
+                boxes_new=torch.mul(boxes,torch.tensor([y_exp, x_exp, y_exp, x_exp, z_exp, z_exp], dtype=torch.float32).cuda())
+                masks = roi_align.roi_align_3d(roi_masks, torch.cat((box_ids, boxes_new), dim=1), cf.mask_shape)
             masks = masks.squeeze(1)
             # Threshold mask pixels at 0.5 to have GT masks be 0 or 1 to use with
             # binary cross entropy loss.
@@ -524,6 +605,8 @@ def detection_target_layer(batch_proposals, batch_mrcnn_class_scores, batch_gt_c
         target_masks = torch.cat(sample_masks)
         target_class_ids = torch.cat(sample_class_ids)
 
+    # print("\n")
+    # print(batch_proposals.shape[0],len(batch_gt_class_ids[0]),positive_count,negative_count)
     # Pad target information with zeros for negative ROIs.
     if positive_count > 0 and negative_count > 0:
         sample_indices = torch.cat((torch.cat(sample_positive_indices), torch.cat(sample_negative_indices)), dim=0)
@@ -692,55 +775,55 @@ def fp_get_detections(cf, batch_ixs, rois, deltas, scores):
     refined_rois = mutils.clip_to_window(cf.window, refined_rois)
     refined_rois = torch.round(refined_rois)
 
-    # # filter out low confidence boxes
-    # keep = idx
-    # keep_bool = (class_scores >= cf.model_min_confidence)
-    # if not 0 in torch.nonzero(keep_bool).size():
-    #
-    #     score_keep = torch.nonzero(keep_bool)[:, 0]
-    #     pre_nms_class_ids = class_ids[score_keep]
-    #     pre_nms_rois = refined_rois[score_keep]
-    #     pre_nms_scores = class_scores[score_keep]
-    #     pre_nms_batch_ixs = batch_ixs[score_keep]
-    #
-    #     for j, b in enumerate(mutils.unique1d(pre_nms_batch_ixs)):
-    #
-    #         bixs = torch.nonzero(pre_nms_batch_ixs == b)[:, 0]
-    #         bix_class_ids = pre_nms_class_ids[bixs]
-    #         bix_rois = pre_nms_rois[bixs]
-    #         bix_scores = pre_nms_scores[bixs]
-    #
-    #         for i, class_id in enumerate(mutils.unique1d(bix_class_ids)):
-    #
-    #             ixs = torch.nonzero(bix_class_ids == class_id)[:, 0]
-    #             # nms expects boxes sorted by score.
-    #             ix_rois = bix_rois[ixs]
-    #             ix_scores = bix_scores[ixs]
-    #             ix_scores, order = ix_scores.sort(descending=True)
-    #             ix_rois = ix_rois[order, :]
-    #
-    #             class_keep = nms.nms(ix_rois, ix_scores, cf.detection_nms_threshold)
-    #
-    #             # map indices back.
-    #             class_keep = keep[score_keep[bixs[ixs[order[class_keep]]]]]
-    #             # merge indices over classes for current batch element
-    #             b_keep = class_keep if i == 0 else mutils.unique1d(torch.cat((b_keep, class_keep)))
-    #
-    #         # only keep top-k boxes of current batch-element
-    #         top_ids = class_scores[b_keep].sort(descending=True)[1][:cf.model_max_instances_per_batch_element]
-    #         b_keep = b_keep[top_ids]
-    #
-    #         # merge indices over batch elements.
-    #         batch_keep = b_keep  if j == 0 else mutils.unique1d(torch.cat((batch_keep, b_keep)))
-    #
-    #     keep = batch_keep
-    #
-    # else:
-    #     keep = torch.tensor([0]).long().cuda()
-    #
-    # # arrange output
-    # output = [refined_rois[keep], batch_ixs[keep].unsqueeze(1)]
-    # output += [class_ids[keep].unsqueeze(1).float(), class_scores[keep].unsqueeze(1)]
+    # filter out low confidence boxes
+    keep = idx
+    keep_bool = (class_scores >= cf.model_min_confidence)
+    if not 0 in torch.nonzero(keep_bool).size():
+
+        score_keep = torch.nonzero(keep_bool)[:, 0]
+        pre_nms_class_ids = class_ids[score_keep]
+        pre_nms_rois = refined_rois[score_keep]
+        pre_nms_scores = class_scores[score_keep]
+        pre_nms_batch_ixs = batch_ixs[score_keep]
+
+        for j, b in enumerate(mutils.unique1d(pre_nms_batch_ixs)):
+
+            bixs = torch.nonzero(pre_nms_batch_ixs == b)[:, 0]
+            bix_class_ids = pre_nms_class_ids[bixs]
+            bix_rois = pre_nms_rois[bixs]
+            bix_scores = pre_nms_scores[bixs]
+
+            for i, class_id in enumerate(mutils.unique1d(bix_class_ids)):
+
+                ixs = torch.nonzero(bix_class_ids == class_id)[:, 0]
+                # nms expects boxes sorted by score.
+                ix_rois = bix_rois[ixs]
+                ix_scores = bix_scores[ixs]
+                ix_scores, order = ix_scores.sort(descending=True)
+                ix_rois = ix_rois[order, :]
+
+                class_keep = nms.nms(ix_rois, ix_scores, cf.detection_nms_threshold)
+
+                # map indices back.
+                class_keep = keep[score_keep[bixs[ixs[order[class_keep]]]]]
+                # merge indices over classes for current batch element
+                b_keep = class_keep if i == 0 else mutils.unique1d(torch.cat((b_keep, class_keep)))
+
+            # only keep top-k boxes of current batch-element
+            top_ids = class_scores[b_keep].sort(descending=True)[1][:cf.model_max_instances_per_batch_element]
+            b_keep = b_keep[top_ids]
+
+            # merge indices over batch elements.
+            batch_keep = b_keep  if j == 0 else mutils.unique1d(torch.cat((batch_keep, b_keep)))
+
+        keep = batch_keep
+
+    else:
+        keep = torch.tensor([0]).long().cuda()
+
+    # arrange output
+    output = [refined_rois[keep], batch_ixs[keep].unsqueeze(1)]
+    output += [class_ids[keep].unsqueeze(1).float(), class_scores[keep].unsqueeze(1)]
 
     # arrange output
     output = [refined_rois, batch_ixs.unsqueeze(1)]
@@ -844,6 +927,8 @@ def fp_refine_detections(cf, batch_ixs, rois, deltas, scores):
     result = torch.cat(output, dim=1)
     # shape: (n_keeps, catted feats), catted feats: [0:dim*2] are box_coords, [dim*2] are batch_ics,
     # [dim*2+1] are class_ids, [dim*2+2] are scores, [dim*2+3:] are regression vector features (incl uncertainty)
+    # print('\n')
+    # print(rois.shape[0],result.shape[0])
     return result
 
 ############################################################
@@ -1068,9 +1153,10 @@ class net(nn.Module):
 
         # forword Fp_reduce
         self.fp_redcue_feature=[fp_redcue_feature]
-        rpn_pred_probs=F.softmax(class_logits.view(-1, class_logits.shape[-1]), 1)
-        proposal_boxes, detections_fp=self.forward_Fp_reduce(img,rpn_pred_probs,pred_deltas) #(img,rpn_pred_probs,rpn_pred_deltas)
-        mrcnn_class_logits, mrcnn_pred_deltas, mrcnn_pred_mask, target_class_ids, mrcnn_target_deltas, target_mask, \
+        rpn_pred_probs=F.softmax(class_logits, 2)
+
+        proposal_boxes, detections_fpd=self.forward_Fp_reduce(img,rpn_pred_probs,pred_deltas) #(img,rpn_pred_probs,rpn_pred_deltas)
+        mrcnn_class_logits,  target_class_ids, mrcnn_target_deltas, target_mask, \
         sample_proposals = self.loss_samples_forward(gt_class_ids, gt_boxes, gt_masks)
 
 
@@ -1097,6 +1183,7 @@ class net(nn.Module):
                 anchor_class_match = np.array([-1]*self.np_anchors.shape[0])
                 anchor_target_deltas = np.array([0])
 
+            # print(anchor_class_match.shape)
             anchor_class_match = torch.from_numpy(anchor_class_match).cuda()
             anchor_target_deltas = torch.from_numpy(anchor_target_deltas).float().cuda()
 
@@ -1135,22 +1222,20 @@ class net(nn.Module):
         # else:
         #     mrcnn_mask_loss = torch.FloatTensor([0]).cuda()
 
-        mrcnn_mask_loss = torch.FloatTensor([0]).cuda()
-        loss = batch_class_loss + batch_bbox_loss + fp_reduce_class_loss + mrcnn_mask_loss
+        loss = batch_class_loss + batch_bbox_loss + fp_reduce_class_loss
+        # loss = fp_reduce_class_loss
 
         # monitor RPN performance: detection count = the number of correctly matched proposals per fg-class.
         dcount = [list(target_class_ids.cpu().data.numpy()).count(c) for c in np.arange(self.cf.head_classes)[1:]]
 
 
-        results_dict = get_results(self.cf, img.shape, detections_fp, seg_logits, box_results_list)
+        results_dict = get_results(self.cf, img.shape, detections_fpd, seg_logits, box_results_list)
 
         results_dict['torch_loss'] = loss
         results_dict['monitor_values'] = {'loss': loss.item(), 'class_loss': fp_reduce_class_loss.item()}
 
-        results_dict['logger_string'] = \
-            "loss: {0:.2f}, rpn_class: {1:.2f}, rpn_bbox: {2:.2f}, fp_reduce_class: {3:.2f}, \
-            dcount {6}".format(loss.item(), batch_class_loss.item(),batch_bbox_loss.item(), fp_reduce_class_loss.item(),dcount)
-
+        # results_dict['logger_string'] = "loss: {0:.2f}, rpn_class: {1:.2f}, rpn_bbox: {2:.2f}, fp_reduce_class: {3:.2f},dcount {6}".format(loss.item(), batch_class_loss.item(),batch_bbox_loss.item(), fp_reduce_class_loss.item(),dcount)
+        results_dict['logger_string'] = "loss: {0:.2f}, rpn_class: {1:.2f}, rpn_bbox: {2:.2f}, fp_reduce_class: {3:.2f}".format(loss.item(), batch_class_loss.item(),batch_bbox_loss.item(), fp_reduce_class_loss.item())
         return results_dict
 
 
@@ -1171,9 +1256,9 @@ class net(nn.Module):
         class_logits, pred_deltas, seg_logits, fp_redcue_feature = self.forward(img)
         self.fp_redcue_feature = [fp_redcue_feature]
         rpn_pred_probs = F.softmax(class_logits.view(-1, class_logits.shape[-1]), 1)
-        _, detections_fp = self.forward_Fp_reduce(img, rpn_pred_probs, pred_deltas)
+        _, detections_fpd = self.forward_Fp_reduce(img, rpn_pred_probs, pred_deltas)
 
-        results_dict = get_results(self.cf, img.shape, detections_fp, seg_logits)
+        results_dict = get_results(self.cf, img.shape, detections_fpd, seg_logits)
         return results_dict
 
 
@@ -1190,7 +1275,7 @@ class net(nn.Module):
         # Feature extraction
         fpn_outs = self.Fpn(img)
         seg_logits = self.final_conv(fpn_outs[0])
-        selected_fmaps = [fpn_outs[i + 1] for i in self.cf.pyramid_levels]
+        selected_fmaps = [fpn_outs[i + 2] for i in self.cf.pyramid_levels]
 
         # Loop through pyramid layers
         class_layer_outputs, bb_reg_layer_outputs = [], []  # list of lists
@@ -1214,7 +1299,7 @@ class net(nn.Module):
         # detections = refine_detections(self.anchors, flat_class_softmax, flat_bb_outputs, batch_ixs, self.cf)
 
         # return detections, class_logits, bb_outputs, seg_logits, fpn_outs[0]
-        return class_logits, bb_outputs, seg_logits, fpn_outs[0]
+        return class_logits, bb_outputs, seg_logits, fpn_outs[2]
 
 
     def forward_Fp_reduce(self, img,rpn_pred_probs,rpn_pred_deltas,is_training=True):
@@ -1228,8 +1313,7 @@ class net(nn.Module):
         """
         # generate proposals: apply predicted deltas to anchors and filter by foreground scores from RPN classifier.
         proposal_count = self.cf.post_nms_rois_training if is_training else self.cf.post_nms_rois_inference
-        batch_rpn_rois, batch_proposal_boxes = refine_proposals(rpn_pred_probs, rpn_pred_deltas, proposal_count,
-                                                                self.anchors, self.cf)
+        batch_rpn_rois, batch_proposal_boxes = refine_proposals(rpn_pred_probs, rpn_pred_deltas, proposal_count,self.anchors, self.cf)
 
         # merge batch dimension of proposals while storing allocation info in coordinate dimension.
         batch_ixs = torch.from_numpy(
@@ -1251,13 +1335,13 @@ class net(nn.Module):
                 chunk_class_logits = self.fp_reduce(self.fp_redcue_feature, chunk)
                 class_logits_list.append(chunk_class_logits)
         batch_mrcnn_class_logits = torch.cat(class_logits_list, 0)
-
         self.batch_mrcnn_class_scores = F.softmax(batch_mrcnn_class_logits, dim=1) # (n_proposals, n_classes)
 
         # refine classified proposals, filter and return final detections.
         # detections = fp_refine_detections(self.cf, batch_ixs, rpn_rois, batch_mrcnn_bbox, self.batch_mrcnn_class_scores)
-        # # batch_mrcnn_bbox=torch.zeros((self.batch_mrcnn_class_scores.size()[0],self.batch_mrcnn_class_scores.size()[1],2*self.cf.dim))   # (n_proposals, n_classes, 2 * dim)
-        detections = fp_get_detections(self.cf, batch_ixs, rpn_rois, self.batch_mrcnn_class_scores)
+        batch_mrcnn_bbox=torch.zeros((self.batch_mrcnn_class_scores.size()[0],self.batch_mrcnn_class_scores.size()[1],2*self.cf.dim)).cuda()   # (n_proposals, n_classes, 2 * dim)
+        detections = fp_refine_detections(self.cf, batch_ixs, rpn_rois, batch_mrcnn_bbox, self.batch_mrcnn_class_scores)
+        # detections = fp_get_detections(self.cf, batch_ixs, rpn_rois, batch_mrcnn_bbox, self.batch_mrcnn_class_scores)
 
         # forward remaining detections through mask-head to generate corresponding masks.
         # scale = [img.shape[2]] * 4 + [img.shape[-1]] * 2
@@ -1294,16 +1378,16 @@ class net(nn.Module):
         # re-use feature maps and RPN output from first forward pass.
         sample_proposals = self.rpn_rois_batch_info[sample_ix]
         if 0 not in sample_proposals.size():
-            sample_logits, sample_boxes = self.fp_reduce(self.fp_redcue_feature, sample_proposals)
+            sample_logits = self.fp_reduce(self.fp_redcue_feature, sample_proposals)
             # sample_mask = self.mask(self.fp_redcue_feature, sample_proposals)
         else:
             sample_logits = torch.FloatTensor().cuda()
-            sample_boxes = torch.FloatTensor().cuda()
+            # sample_boxes = torch.FloatTensor().cuda()
             # sample_mask = torch.FloatTensor().cuda()
 
         # return [sample_logits, sample_boxes, sample_mask, sample_target_class_ids, sample_target_deltas,
         #         sample_target_mask, sample_proposals]
 
-        return [sample_logits, sample_boxes, sample_target_class_ids, sample_target_deltas,
+        return [sample_logits, sample_target_class_ids, sample_target_deltas,
                 sample_target_mask, sample_proposals]
 

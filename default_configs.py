@@ -20,19 +20,21 @@ import os
 
 class DefaultConfigs:
 
-    def __init__(self, model, server_env=False, dim=2):
+    def __init__(self, model, backbone,server_env=False, dim=2):
         self.server_env = server_env
         #########################
         #         I/O           #
         #########################
 
         self.model = model
+        self.backbone = backbone
         self.dim = dim
         # int [0 < dataset_size]. select n patients from dataset for prototyping.
         self.select_prototype_subset = None
 
         # some default paths.
-        self.backbone_path = 'models/backbone.py'
+        # self.backbone_path = 'models/backbone.py'
+        self.backbone_path = 'models/{}.py'.format(self.backbone)
         self.source_dir = os.path.dirname(os.path.realpath(__file__)) #current dir.
         self.input_df_name = 'info_df.pickle'
         self.model_path = 'models/{}.py'.format(self.model)
