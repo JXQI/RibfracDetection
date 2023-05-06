@@ -108,7 +108,7 @@ if __name__=="__main__":
     # 选择（x,y）
     print(boxes_norm.shape)
 
-    k=4
+    k=12
     print("[INFO] Initialize model")
     model = AnchorKmeans(k)
 
@@ -119,7 +119,7 @@ if __name__=="__main__":
     print("[INFO] The results anchors:\n{}".format(anchors))
 
     k_list,IoU=[],[]
-    for k in range(2, 11):
+    for k in range(9, 13):
         model = AnchorKmeans(k, random_seed=333)
         model.fit(boxes_norm)
         avg_iou = model.avg_iou()
